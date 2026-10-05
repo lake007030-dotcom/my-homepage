@@ -426,6 +426,7 @@
       '<span class="facet-name">' + esc(c.name) + '</span>' +
       '<span class="facet-summary">' + esc(c.summary) + '</span>' +
       '<span class="facet-go"><span>展开</span><span class="arrow">→</span></span>' +
+      '<i class="sheen" aria-hidden="true"></i>' +
       '</button>').join('');
 
     /* 顶部导航 */
@@ -459,12 +460,12 @@
 
   function wireHome() {
     $$('.facet', $('#facetGrid')).forEach((el) => {
-      const go = () => { location.hash = '#/' + el.dataset.id; };
+      const go = () => liquidGo('#/' + el.dataset.id, el);
       el.addEventListener('click', go);
       attachTilt(el, 4);
     });
     $$('#hudNav button').forEach((el) => {
-      el.addEventListener('click', () => { location.hash = '#/' + el.dataset.id; });
+      el.addEventListener('click', () => liquidGo('#/' + el.dataset.id, el));
     });
   }
 
@@ -490,11 +491,19 @@
 
     const box = $('#blocks');
     box.innerHTML = cat.blocks.map(blockHTML).join('');
-    /* 给每个块标上数组下标，避免块数与下标错位 */
-    $$('.block', box).forEach((el, i) => { el.dataset.bi = String(i); });
+    /* 给每个块标上数组下标，避免块数与下标错位；顺手加一层玻璃高光 */
+    $$('.block', box).forEach((el, i) => {
+      el.dataset.bi = String(i);
+      if (reduceMotion) return;
+      const sh = document.createElement('i');
+      sh.className = 'sheen';
+      sh.setAttribute('aria-hidden', 'true');
+      el.appendChild(sh);
+      attachTilt(el, 0);          /* 只驱动 --mx / --my，不做倾斜 */
+    });
     if (!cat.blocks.length) {
       box.innerHTML = '<div class="block"><p class="block-body">这个分类还没有内容。' +
-        '点右下角 ✎ 进入编辑面板即可添加。</p></div>';
+        '点右下角的「编辑主页」就能添加。</p></div>';
     }
     wireBlocks();
 
@@ -606,7 +615,7 @@
           '<div class="photo-grid">' +
             (list.length
               ? list.map((x, j) => photoCardHTML(x.p, j, x.album)).join('')
-              : '<p class="photo-empty">这个相册还没有照片。点右下角 ✎ 添加。</p>') +
+              : '<p class="photo-empty">这个相册还没有照片。点「编辑主页」即可添加。</p>') +
           '</div></div>';
       }
 
@@ -672,11 +681,69 @@
     });
   }
 
+  /* ══ 液态玻璃转场 ══════════════════════════════════════════════════
+     点开某一面时：一块磨砂玻璃先盖住被点的那张卡片，
+     然后像液体一样漫开成整屏（同时有一个液滴从点击处涌出、
+     一道镜面高光斜掠而过），翻页后玻璃再化开露出内容。
+     ══════════════════════════════════════════════════════════════════ */
+  const veil = $('#veil');
+  let veiling = false;
+
+  function liquidGo(hash, fromEl) {
+    if (hash === location.hash || veiling) return;
+    if (reduceMotion || !veil) { location.hash = hash; return; }
+
+    const r = fromEl && fromEl.getBoundingClientRect ? fromEl.getBoundingClientRect() : null;
+    const vw = innerWidth, vh = innerHeight;
+    veiling = true;
+
+    /* 1. 薄片先停在被点元素的位置上 */
+    veil.style.transition = 'none';
+    veil.classList.remove('open', 'cover', 'out');
+    if (r && r.width > 10 && r.height > 10) {
+      const pad = 8;
+      const top = Math.max(0, r.top - pad);
+      const left = Math.max(0, r.left - pad);
+      const right = Math.max(0, vw - Math.min(vw, r.right + pad));
+      const bottom = Math.max(0, vh - Math.min(vh, r.bottom + pad));
+      const rad = Math.max(4, Math.min(20, Math.round(Math.min(r.width, r.height) * .12)));
+      veil.style.clipPath = 'inset(' + top + 'px ' + right + 'px ' + bottom + 'px ' +
+        left + 'px round ' + rad + 'px)';
+      veil.style.setProperty('--vx', ((r.left + r.width / 2) / vw * 100).toFixed(2) + '%');
+      veil.style.setProperty('--vy', ((r.top + r.height / 2) / vh * 100).toFixed(2) + '%');
+    } else {
+      veil.style.clipPath = 'inset(46% round 10px)';
+    }
+    veil.classList.add('on');
+    void veil.offsetWidth;
+
+    /* 2. 漫开成整屏 */
+    veil.style.transition = '';
+    requestAnimationFrame(() => {
+      veil.classList.add('open');
+      veil.style.clipPath = 'inset(0px round 0px)';
+    });
+
+    /* 3. 全屏后翻页，再化开 */
+    setTimeout(() => veil.classList.add('cover'), 380);
+    setTimeout(() => { if (location.hash !== hash) location.hash = hash; }, 520);
+    setTimeout(() => veil.classList.add('out'), 660);
+    setTimeout(() => {
+      veil.classList.remove('on', 'open', 'cover', 'out');
+      veil.style.transition = 'none';
+      veil.style.clipPath = 'inset(46% round 10px)';
+      void veil.offsetWidth;
+      veil.style.transition = '';
+      veiling = false;
+    }, 1260);
+  }
+
   /* ══ 视图路由 ══════════════════════════════════════════════════════ */
   function route() {
     const id = currentId();
     const ok = id ? renderDetail(id) : false;
     const home = $('#view-home'), detail = $('#view-detail');
+    document.body.classList.toggle('detail', !!ok);
 
     if (ok) {
       home.hidden = true; detail.hidden = false;
@@ -695,9 +762,13 @@
   }
 
   addEventListener('hashchange', route);
-  $('#backBtn').addEventListener('click', () => { location.hash = '#/'; });
-  $('#backBtn2').addEventListener('click', () => { location.hash = '#/'; });
-  $('#brandLink').addEventListener('click', () => { location.hash = '#/'; });
+  $('#backBtn').addEventListener('click', (e) => liquidGo('#/', e.currentTarget));
+  $('#backBtn2').addEventListener('click', (e) => liquidGo('#/', e.currentTarget));
+  $('#brandLink').addEventListener('click', (e) => {
+    if (!location.hash || location.hash === '#') return;
+    e.preventDefault();
+    liquidGo('#/', e.currentTarget);
+  });
 
   /* ══ 卡片三维倾斜 ══════════════════════════════════════════════════ */
   function attachTilt(el, max) {
@@ -812,7 +883,7 @@
           const cv = document.createElement('canvas');
           cv.width = w; cv.height = h;
           const ctx = cv.getContext('2d');
-          ctx.fillStyle = '#0A1220';
+          ctx.fillStyle = '#0A0A0B';
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
           resolve(cv.toDataURL('image/jpeg', quality));
@@ -832,10 +903,35 @@
     document.body.classList.toggle('editing', on);
     editor.setAttribute('aria-hidden', on ? 'false' : 'true');
     document.body.classList.toggle('no-scroll', on && matchMedia('(max-width:1119px)').matches);
-    if (on) syncFields();
+    if (on) { hideCoach(false); syncFields(); }
   }
   $('#fab').addEventListener('click', () => setEditing(true));
   $('#closeEditor').addEventListener('click', () => setEditing(false));
+
+  /* 三个入口都能打开编辑面板 */
+  ['#hudEdit', '#footEdit'].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.addEventListener('click', () => setEditing(true));
+  });
+
+  /* 首次访问提示：没见过就浮出来，见过一次就不再打扰 */
+  const COACH_KEY = 'my-homepage-coach-v1';
+  const coach = $('#coach');
+  let coachDone = false;
+  try { coachDone = localStorage.getItem(COACH_KEY) === '1'; } catch (e) { coachDone = false; }
+  function hideCoach(remember) {
+    if (!coach || coach.hidden) return;
+    coach.hidden = true;
+    if (remember) { try { localStorage.setItem(COACH_KEY, '1'); } catch (e) {} }
+  }
+  if (coach && !coachDone) {
+    setTimeout(() => {
+      if (!document.body.classList.contains('editing')) coach.hidden = false;
+    }, 1800);
+    const cx = $('#coachX'), cg = $('#coachGo');
+    if (cx) cx.addEventListener('click', () => hideCoach(true));
+    if (cg) cg.addEventListener('click', () => { hideCoach(true); setEditing(true); });
+  }
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -1231,14 +1327,41 @@
       ? '<img src="' + esc(state.avatar) + '" alt="">'
       : esc(initial(state.monogram || state.name));
   }
-  $('#avatarFile').addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
+
+  /* 编辑器里的「上传照片」和直接点头像，走同一套处理 */
+  async function applyAvatar(file) {
+    if (!file) return;
+    if (file.type && !/^image\//.test(file.type)) { toast('请选择图片文件'); return; }
     try {
-      state.avatar = await shrinkImage(f, 700, .85);
-      renderAvatarPreview(); commit(); toast('头像已更新');
+      toast('正在处理图片…');
+      state.avatar = await shrinkImage(file, 900, .86);
+      renderAvatarPreview();
+      commit();
+      toast('头像已更新，已存在这台浏览器里');
     } catch (err) { toast(err.message || '图片处理失败'); }
+  }
+
+  $('#avatarFile').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    applyAvatar(f);
+    e.target.value = '';
   });
+
+  const avatarQuick = $('#avatarQuick');
+  if (avatarQuick) {
+    avatarQuick.addEventListener('change', (e) => {
+      applyAvatar(e.target.files && e.target.files[0]);
+      e.target.value = '';
+    });
+    const av = $('#avatar');
+    if (av) {
+      av.addEventListener('click', () => avatarQuick.click());
+      av.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); avatarQuick.click(); }
+      });
+    }
+  }
+
   $('#avatarClear').addEventListener('click', () => {
     state.avatar = ''; renderAvatarPreview(); commit();
   });
