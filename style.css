@@ -1041,6 +1041,22 @@ footer .drawer{ flex-basis:100%; width:100%; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   浅白是默认配色之后的收尾
+   ── 光点单独一个颜色变量：白底上光点如果还是纯白/纯黑就不对了；
+      深色主题 --dust 接近 --ink（看起来没变），浅白主题换成中灰。
+   ══════════════════════════════════════════════════════════════════════ */
+:root{ --dust:#FAFAFA; }
+[data-theme="graphite"]{ --dust:#F3F3F3; }
+[data-theme="paper"]{ --dust:#8A8A8A; }
+/* 纸面上的颗粒噪点再淡一点，否则像纸上落了灰 */
+[data-theme="paper"] .bg-grain{ opacity:.035; }
+[data-theme="paper"] .bg-grid{
+  background-image:
+    linear-gradient(to right,rgba(0,0,0,.05) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(0,0,0,.05) 1px,transparent 1px);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    主题：黑 / 灰 / 白 三套单色方案
    <html data-theme="obsidian|graphite|paper">，由 app.js 记住选择。
    obsidian 纯黑是默认值，就写在 :root 里，这里只写另外两套。

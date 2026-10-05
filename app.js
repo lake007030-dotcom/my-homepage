@@ -163,11 +163,13 @@
      配色：黑 / 灰 / 白 三套单色主题（写在 <html data-theme="..."> 上）
      颜色本身都在 style.css 的 :root 与 [data-theme] 里，这里只管切换和记忆。
      ══════════════════════════════════════════════════════════════════ */
-  const THEME_KEY = 'my-homepage-theme';
+  /* 键名带 v2：以前存过的配色不会盖住新的默认值 */
+  const THEME_KEY = 'my-homepage-theme-v2';
+  const DEFAULT_THEME = 'paper';     /* 默认配色：宣纸 · 浅白 */
   const THEMES = [
+    { id: 'paper',    name: '宣纸 · 浅白', meta: '#F1F1EF' },
     { id: 'obsidian', name: '曜石 · 纯黑', meta: '#000000' },
-    { id: 'graphite', name: '石墨 · 深灰', meta: '#131313' },
-    { id: 'paper',    name: '宣纸 · 浅白', meta: '#F1F1EF' }
+    { id: 'graphite', name: '石墨 · 深灰', meta: '#131313' }
   ];
   const themeMeta = (id) => (THEMES.find((t) => t.id === id) || THEMES[0]).meta;
 
@@ -188,14 +190,14 @@
 
   /* 画布要用的颜色：光点、连线、高光核心、鼠标微光 */
   function readPalette() {
-    const ink = cssColor('--ink', [250, 250, 250]);
+    const dust = cssColor('--dust', [250, 250, 250]);   /* 光点专用色（浅白底上换成中灰） */
     const acc = cssColor('--accent-rgb', [255, 255, 255]);
     const mid = cssColor('--ink-3', [118, 118, 118]);
-    return { dots: [ink, acc, mid], link: ink, core: ink, glow: acc };
+    return { dots: [dust, acc, mid], link: dust, core: dust, glow: acc };
   }
 
   function applyTheme(id) {
-    const t = THEMES.some((x) => x.id === id) ? id : 'obsidian';
+    const t = THEMES.some((x) => x.id === id) ? id : DEFAULT_THEME;
     document.documentElement.setAttribute('data-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', themeMeta(t));
@@ -1973,7 +1975,7 @@
       toast('配色换成「' + t.name + '」');
     });
   });
-  applyTheme(document.documentElement.getAttribute('data-theme') || 'obsidian');
+  applyTheme(document.documentElement.getAttribute('data-theme') || DEFAULT_THEME);
 
   /* —— 导出 / 复制 / 重置 —— */
   const configText = () =>

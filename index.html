@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#F1F1EF" />
 <meta name="description" content="个人主页 · 我的几面 · 人生记录 · 联系方式" />
 <title>个人主页</title>
 <link rel="stylesheet" href="style.css" />
@@ -11,8 +11,8 @@
 /* 先按上次选的配色上色，免得刷新时先闪一下黑底再变白 */
 (function () {
   try {
-    var t = localStorage.getItem('my-homepage-theme');
-    if (t !== 'graphite' && t !== 'paper') t = 'obsidian';
+    var t = localStorage.getItem('my-homepage-theme-v2');
+    if (t !== 'obsidian' && t !== 'graphite' && t !== 'paper') t = 'paper';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
     if (m) m.setAttribute('content',
@@ -412,12 +412,12 @@
       <div class="ed-sec">
         <h3>界面颜色 <em>点一下马上换，选你看着舒服的</em></h3>
         <div class="theme-row" id="themeRow">
+          <button class="theme-chip" data-theme-set="paper" type="button">
+            <i class="sw sw-white"></i>宣纸 · 浅白</button>
           <button class="theme-chip" data-theme-set="obsidian" type="button">
             <i class="sw sw-black"></i>曜石 · 纯黑</button>
           <button class="theme-chip" data-theme-set="graphite" type="button">
             <i class="sw sw-grey"></i>石墨 · 深灰</button>
-          <button class="theme-chip" data-theme-set="paper" type="button">
-            <i class="sw sw-white"></i>宣纸 · 浅白</button>
         </div>
       </div>
       <div class="ed-sec">
