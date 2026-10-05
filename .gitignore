@@ -1,0 +1,11 @@
+# 与这个网站无关的本地内容，不要提交
+ds-course-c/
+.verify/
+.preview/
+
+# 系统 / 编辑器杂项
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp
+*.log

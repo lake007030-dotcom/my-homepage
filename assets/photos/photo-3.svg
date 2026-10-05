@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="照片占位图 3">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#07100F"/>
+      <stop offset="100%" stop-color="#0E2320"/>
+    </linearGradient>
+    <radialGradient id="gl3" cx="50%" cy="34%" r="64%">
+      <stop offset="0%" stop-color="#4FE3C1" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#4FE3C1" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="gr3" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0v60" fill="none" stroke="#FFFFFF" stroke-opacity="0.05"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg3)"/>
+  <rect width="1200" height="900" fill="url(#gr3)"/>
+  <rect width="1200" height="900" fill="url(#gl3)"/>
+  <text x="96" y="150" font-family="ui-monospace,Consolas,monospace" font-size="30"
+        letter-spacing="8" fill="#7FC4B4">03 / PHOTO</text>
+  <text x="96" y="800" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="64"
+        font-weight="600" fill="#F4F7FB" opacity="0.94">照片数量不限</text>
+  <text x="96" y="856" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="30"
+        fill="#8A93A6">在编辑面板里点「添加照片」即可</text>
+</svg>

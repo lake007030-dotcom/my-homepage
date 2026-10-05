@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" role="img" aria-label="照片占位图 1">
+  <defs>
+    <linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1020"/>
+      <stop offset="100%" stop-color="#151C33"/>
+    </linearGradient>
+    <radialGradient id="gl1" cx="28%" cy="22%" r="62%">
+      <stop offset="0%" stop-color="#6E9BFF" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#6E9BFF" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="gr1" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0v60" fill="none" stroke="#FFFFFF" stroke-opacity="0.05"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg1)"/>
+  <rect width="1200" height="900" fill="url(#gr1)"/>
+  <rect width="1200" height="900" fill="url(#gl1)"/>
+  <text x="96" y="150" font-family="ui-monospace,Consolas,monospace" font-size="30"
+        letter-spacing="8" fill="#8FA3C8">01 / PHOTO</text>
+  <text x="96" y="800" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="64"
+        font-weight="600" fill="#F4F7FB" opacity="0.94">换成你的第一张照片</text>
+  <text x="96" y="856" font-family="PingFang SC,Microsoft YaHei,sans-serif" font-size="30"
+        fill="#8A93A6">assets/photos/你的照片.jpg</text>
+</svg>
