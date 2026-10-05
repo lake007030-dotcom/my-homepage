@@ -9,7 +9,7 @@
   const STORE_KEY = 'my-homepage-profile-v2';
   /* 数据结构版本：改动 profile.js 的字段结构时 +1，浏览器里的旧草稿会自动失效，
      否则旧草稿会覆盖新结构，让你误以为「改了没生效」。 */
-  const SCHEMA = 3;
+  const SCHEMA = 4;
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -96,6 +96,14 @@
       monogram: raw.monogram || initial(raw.name),
       role: raw.role || '身份 / 头衔',
       location: raw.location || '所在城市',
+      coords: (raw.coords && typeof raw.coords.lat === 'number' &&
+        typeof raw.coords.lng === 'number')
+        ? {
+          lat: raw.coords.lat, lng: raw.coords.lng,
+          acc: raw.coords.acc || 0, at: raw.coords.at || 0,
+          source: raw.coords.source === 'gps' ? 'gps' : 'manual'
+        }
+        : {},
       available: raw.available || '开放合作',
       statement: raw.statement || '一句话介绍你自己。',
       accent: raw.accent || '',
@@ -127,6 +135,7 @@
 
   let state = loadState();
   let settle = false;
+  let watchId = null;      /* 坐标「跟随」模式的 watchPosition id（见第四节） */
   try { settle = !!localStorage.getItem(STORE_KEY); } catch (e) { settle = false; }
 
   function save() {
@@ -367,6 +376,8 @@
     const res = $('#resVal');
     if (res) res.textContent = innerWidth + '×' + innerHeight + ' px · DPR ' +
       Math.min(devicePixelRatio || 1, 2) + ' · CANVAS 2D';
+
+    renderCoords();   /* 让「刚刚 / 3 分钟前 / 跟随中」保持实时 */
   }
 
   function tickClock() {
@@ -395,6 +406,16 @@
     $('#statement').innerHTML = s.accent && s.statement.includes(s.accent)
       ? text.replace(esc(s.accent), '<em>' + esc(s.accent) + '</em>')
       : text;
+
+    /* 标签 */
+    const tags = $('#focusList');
+    if (tags) {
+      tags.innerHTML = (s.focus || []).filter(Boolean)
+        .map((t) => '<span class="chip">' + esc(t) + '</span>').join('');
+    }
+
+    /* 坐标 */
+    renderCoords();
 
     /* 头像 */
     const av = $('#avatar');
@@ -488,6 +509,8 @@
     $('#dName').textContent = cat.name;
     $('#dSummary').textContent = cat.summary;
     $('#crumb').textContent = '我的几面 / ' + cat.name;
+    if ($('#dEditName')) $('#dEditName').textContent = cat.name;
+    drawerCatId = cat.id;      /* 详情抽屉始终跟着当前这一面 */
 
     const box = $('#blocks');
     box.innerHTML = cat.blocks.map(blockHTML).join('');
@@ -754,6 +777,7 @@
       detail.hidden = true; home.hidden = false;
       document.title = state.name + ' · 个人主页';
       $$('#hudNav button').forEach((b) => b.classList.remove('on'));
+      if (isOpen('detail')) setOpen('detail', false);   /* 回到首页就收起这一面的抽屉 */
       home.classList.remove('enter');
       void home.offsetWidth;
       home.classList.add('enter');
@@ -895,26 +919,139 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     三、编辑面板
+     三、就地编辑：每块内容自己带一个 ✎，点开原地改，改完「✓ 完成」
      ══════════════════════════════════════════════════════════════════ */
-  const editor = $('#editor');
+  const MENU_ITEMS = [
+    ['hero',    '首屏：姓名 / 主张 / 头像'],
+    ['console', '实时读数：信息行'],
+    ['cats',    '我的几面'],
+    ['stats',   '三个数字'],
+    ['socials', '联系方式与社交'],
+    ['footer',  '页脚与备份']
+  ];
+  let openName = null;          /* 当前打开的抽屉 */
+  let drawerCatId = null;       /* 详情抽屉正在编辑哪一面 */
 
-  function setEditing(on) {
-    document.body.classList.toggle('editing', on);
-    editor.setAttribute('aria-hidden', on ? 'false' : 'true');
-    document.body.classList.toggle('no-scroll', on && matchMedia('(max-width:1119px)').matches);
-    if (on) { hideCoach(false); syncFields(); }
+  const drawerOf = (name) => $('[data-drawer="' + name + '"]');
+  const isOpen = (name) => { const el = drawerOf(name); return !!el && !el.hidden; };
+
+  function setOpen(name, on) {
+    const el = drawerOf(name);
+    if (!el) return;
+    if (on) {
+      /* 一次只开一个，免得同时摊开一堆表单 */
+      $$('[data-drawer]').forEach((d) => { d.hidden = true; });
+      $$('[data-open]').forEach((b) => b.classList.toggle('on', b.dataset.open === name));
+      el.hidden = false;
+      openName = name;
+      if (name === 'detail') {
+        drawerCatId = currentId();
+        const cat = state.categories.find((c) => c.id === drawerCatId);
+        if (cat && $('#dEditName')) $('#dEditName').textContent = cat.name;
+      }
+      syncFields();
+      renderEditorLists();
+      if (el.scrollIntoView) {
+        el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      }
+    } else {
+      el.hidden = true;
+      if (openName === name) openName = null;
+      $$('[data-open]').forEach((b) => {
+        if (b.dataset.open === name) b.classList.remove('on');
+      });
+    }
+    syncOpenButtons();
   }
-  $('#fab').addEventListener('click', () => setEditing(true));
-  $('#closeEditor').addEventListener('click', () => setEditing(false));
+  function toggleOpen(name) { setOpen(name, !isOpen(name)); }
 
-  /* 三个入口都能打开编辑面板 */
-  ['#hudEdit', '#footEdit'].forEach((sel) => {
-    const el = $(sel);
-    if (el) el.addEventListener('click', () => setEditing(true));
+  /* 带文字的按钮跟着切换文案（✎ 编辑这一面 ⇄ ✓ 完成） */
+  function syncOpenButtons() {
+    $$('[data-open]').forEach((b) => {
+      const lbl = $('.lbl', b);
+      if (!lbl) return;
+      const name = b.dataset.open;
+      const on = isOpen(name);
+      const auto = { detail: ['编辑这一面', '完成'] }[name];
+      if (!auto) return;
+      /* 收起时用图标 + 文字，展开时就一个 ✓，避免出现两个铅笔 */
+      lbl.textContent = on ? '✓ ' + auto[1] : auto[0];
+    });
+  }
+
+  $$('[data-open]').forEach((b) => {
+    b.addEventListener('click', () => toggleOpen(b.dataset.open));
+  });
+  $$('[data-done]').forEach((b) => {
+    b.addEventListener('click', () => setOpen(b.dataset.done, false));
   });
 
-  /* 首次访问提示：没见过就浮出来，见过一次就不再打扰 */
+  /* 各模块的「+ 添加…」 */
+  $$('[data-add]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const kind = b.dataset.add;
+      if (kind === 'stats') state.stats.push({ n: '0', l: '说明' });
+      if (kind === 'facts') state.facts.push({ k: '新的一项', v: '内容' });
+      if (kind === 'socials') state.socials.push({ name: '新平台', url: '', note: '', badge: '', qr: '' });
+      if (kind === 'cats') {
+        const n = state.categories.length + 1;
+        state.categories.push(normalizeCategory({
+          id: 'node-' + n, glyph: pad2(n), name: '新的一面', en: 'CATEGORY',
+          summary: '一句话说明', blocks: [{ type: 'text', title: '小标题', body: '在这里写内容。' }]
+        }, n - 1));
+      }
+      renderEditorLists(); commit();
+    });
+  });
+
+  /* ── 右下角菜单：列出当前页面能改的几块 ── */
+  const fab = $('#fab'), menu = $('#menu'), menuList = $('#menuList');
+  let menuKind = null;
+
+  function buildMenu() {
+    const onDetail = !$('#view-detail').hidden;
+    const kind = onDetail ? 'detail' : 'home';
+    if (menuKind === kind) return;         /* 同一页面不用重建 */
+    menuKind = kind;
+    $('#menuHead').textContent = onDetail ? '编辑这一面' : '编辑本页';
+    const items = onDetail ? [['detail', '这一面的全部内容']] : MENU_ITEMS;
+    menuList.innerHTML = items.map(([name, label]) =>
+      '<button type="button" data-jump="' + name + '">' + label + '</button>').join('') +
+      '<span class="sep"></span>' +
+      '<button type="button" data-jump="footer">下载 / 备份</button>';
+    $$('[data-jump]', menuList).forEach((b) => {
+      b.addEventListener('click', () => { closeMenu(); setOpen(b.dataset.jump, true); });
+    });
+  }
+
+  function closeMenu() {
+    if (!menu) return;
+    menu.hidden = true;
+    fab.classList.remove('on');
+    fab.setAttribute('aria-expanded', 'false');
+  }
+  function toggleMenu(fromTop) {
+    if (!menu) return;
+    if (menu.hidden) {
+      buildMenu();
+      menu.hidden = false;
+      menu.classList.toggle('top', !!fromTop);
+      fab.classList.add('on');
+      fab.setAttribute('aria-expanded', 'true');
+      hideCoach(false);
+    } else closeMenu();
+  }
+  const hudEdit = $('#hudEdit');
+  if (fab) fab.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(false); });
+  document.addEventListener('click', (e) => {
+    if (!menu || menu.hidden) return;
+    if (menu.contains(e.target) || (fab && fab.contains(e.target)) ||
+        (hudEdit && hudEdit.contains(e.target))) return;
+    closeMenu();
+  });
+  if (hudEdit) hudEdit.addEventListener('click', () => toggleMenu(true));
+
+  /* ── 首次访问提示 ── */
   const COACH_KEY = 'my-homepage-coach-v1';
   const coach = $('#coach');
   let coachDone = false;
@@ -925,23 +1062,23 @@
     if (remember) { try { localStorage.setItem(COACH_KEY, '1'); } catch (e) {} }
   }
   if (coach && !coachDone) {
-    setTimeout(() => {
-      if (!document.body.classList.contains('editing')) coach.hidden = false;
-    }, 1800);
+    setTimeout(() => { if (!openName) coach.hidden = false; }, 1800);
     const cx = $('#coachX'), cg = $('#coachGo');
     if (cx) cx.addEventListener('click', () => hideCoach(true));
-    if (cg) cg.addEventListener('click', () => { hideCoach(true); setEditing(true); });
+    if (cg) cg.addEventListener('click', () => { hideCoach(true); setOpen('hero', true); });
   }
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       if (!lightbox.hidden) return closeLightbox();
-      if (document.body.classList.contains('editing')) setEditing(false);
+      if (menu && !menu.hidden) return closeMenu();
+      if (openName) return setOpen(openName, false);
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
       e.preventDefault();
-      setEditing(!document.body.classList.contains('editing'));
+      if (openName) setOpen(openName, false);
+      else setOpen($('#view-detail').hidden ? 'hero' : 'detail', true);
     }
   });
 
@@ -1227,7 +1364,17 @@
       '</div>';
 
     $$('[data-cf]', el).forEach((inp) => {
-      inp.addEventListener('input', () => { cat[inp.dataset.cf] = inp.value; commit(); });
+      inp.addEventListener('input', () => {
+        const key = inp.dataset.cf;
+        cat[key] = inp.value;
+        /* 改了 id 就等于换了链接：让地址栏和当前页面立刻跟上 */
+        if (key === 'id' && cat.id === drawerCatId) {
+          drawerCatId = inp.value;
+          if (!$('#view-detail').hidden) location.hash = '#/' + inp.value;
+        }
+        if (key === 'name' && $('#dEditName')) $('#dEditName').textContent = inp.value;
+        commit();
+      });
     });
 
     const wrap = $('.blk-wrap', el);
@@ -1251,72 +1398,87 @@
     return el;
   }
 
+  /* 每个槽位可能出现在多个抽屉里，一律全部填充 */
+  const slots = (name) => $$('[data-slot="' + name + '"]');
+
   function renderEditorLists() {
     /* 数字 */
-    const statsBox = $('#edStats');
-    statsBox.innerHTML = '';
-    state.stats.forEach((x, i) => {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.innerHTML = '<div class="two">' +
-        '<label class="field"><span>数字</span><input data-f="n" value="' + esc(x.n) + '"></label>' +
-        '<label class="field"><span>说明</span><input data-f="l" value="' + esc(x.l) + '"></label>' +
-        '</div>' + toolsHTML();
-      $$('[data-f]', row).forEach((inp) => {
-        inp.addEventListener('input', () => { x[inp.dataset.f] = inp.value; commit(); });
+    slots('stats').forEach((box) => {
+      box.innerHTML = '';
+      state.stats.forEach((x, i) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = '<div class="two">' +
+          '<label class="field"><span>数字</span><input data-f="n" value="' + esc(x.n) + '"></label>' +
+          '<label class="field"><span>说明</span><input data-f="l" value="' + esc(x.l) + '"></label>' +
+          '</div>' + toolsHTML();
+        $$('[data-f]', row).forEach((inp) => {
+          inp.addEventListener('input', () => { x[inp.dataset.f] = inp.value; commit(); });
+        });
+        wireTools(row, state.stats, i);
+        box.appendChild(row);
       });
-      wireTools(row, state.stats, i);
-      statsBox.appendChild(row);
     });
 
     /* 信息行 */
-    const factsBox = $('#edFacts');
-    factsBox.innerHTML = '';
-    state.facts.forEach((f, i) => {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.innerHTML = '<div class="two">' +
-        '<label class="field"><span>名称</span><input data-f="k" value="' + esc(f.k) + '"></label>' +
-        '<label class="field"><span>内容</span><input data-f="v" value="' + esc(f.v) + '"></label>' +
-        '</div>' + toolsHTML();
-      $$('[data-f]', row).forEach((inp) => {
-        inp.addEventListener('input', () => { f[inp.dataset.f] = inp.value; commit(); });
+    slots('facts').forEach((box) => {
+      box.innerHTML = '';
+      state.facts.forEach((f, i) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = '<div class="two">' +
+          '<label class="field"><span>名称</span><input data-f="k" value="' + esc(f.k) + '"></label>' +
+          '<label class="field"><span>内容</span><input data-f="v" value="' + esc(f.v) + '"></label>' +
+          '</div>' + toolsHTML();
+        $$('[data-f]', row).forEach((inp) => {
+          inp.addEventListener('input', () => { f[inp.dataset.f] = inp.value; commit(); });
+        });
+        wireTools(row, state.facts, i);
+        box.appendChild(row);
       });
-      wireTools(row, state.facts, i);
-      factsBox.appendChild(row);
     });
 
-    /* 分类 */
-    const catBox = $('#edCategories');
-    catBox.innerHTML = '';
-    $('#catCount').textContent = state.categories.length ? '(' + state.categories.length + ')' : '';
-    state.categories.forEach((c, i) => catBox.appendChild(buildCategoryEditor(c, i)));
+    /* 我的几面（首页管理抽屉） */
+    slots('cats').forEach((box) => {
+      box.innerHTML = '';
+      state.categories.forEach((c, i) => box.appendChild(buildCategoryEditor(c, i)));
+    });
+
+    /* 当前这一面（详情抽屉） */
+    slots('detail').forEach((box) => {
+      box.innerHTML = '';
+      const cat = state.categories.find((c) => c.id === drawerCatId) ||
+                  state.categories.find((c) => c.id === currentId());
+      if (!cat) return;
+      box.appendChild(buildCategoryEditor(cat, state.categories.indexOf(cat)));
+    });
 
     /* 社交 */
-    const socialBox = $('#edSocials');
-    socialBox.innerHTML = '';
-    state.socials.forEach((x, i) => {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.innerHTML =
-        '<div class="row-top">' +
-          '<div class="thumb">' + esc(x.badge || (x.name || '?').slice(0, 1)) + '</div>' +
-          '<div class="grow"><input data-f="name" value="' + esc(x.name) + '" placeholder="平台名"></div>' +
-        '</div>' +
-        '<label class="field"><span>链接（留空则不可点击）</span>' +
-        '<input data-f="url" value="' + esc(x.url) + '" placeholder="https://..."></label>' +
-        '<div class="two">' +
-          '<label class="field"><span>账号 / 备注</span><input data-f="note" value="' + esc(x.note) + '"></label>' +
-          '<label class="field"><span>方框里的字</span><input data-f="badge" maxlength="2" value="' + esc(x.badge) + '"></label>' +
-        '</div>' +
-        '<label class="field"><span>二维码路径（可留空）</span>' +
-        '<input data-f="qr" value="' + esc(x.qr) + '" placeholder="assets/photos/wechat-qr.png"></label>' +
-        toolsHTML();
-      $$('[data-f]', row).forEach((inp) => {
-        inp.addEventListener('input', () => { x[inp.dataset.f] = inp.value; commit(); });
+    slots('socials').forEach((box) => {
+      box.innerHTML = '';
+      state.socials.forEach((x, i) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML =
+          '<div class="row-top">' +
+            '<div class="thumb">' + esc(x.badge || (x.name || '?').slice(0, 1)) + '</div>' +
+            '<div class="grow"><input data-f="name" value="' + esc(x.name) + '" placeholder="平台名"></div>' +
+          '</div>' +
+          '<label class="field"><span>链接（留空则不可点击）</span>' +
+          '<input data-f="url" value="' + esc(x.url) + '" placeholder="https://..."></label>' +
+          '<div class="two">' +
+            '<label class="field"><span>账号 / 备注</span><input data-f="note" value="' + esc(x.note) + '"></label>' +
+            '<label class="field"><span>方框里的字</span><input data-f="badge" maxlength="2" value="' + esc(x.badge) + '"></label>' +
+          '</div>' +
+          '<label class="field"><span>二维码路径（可留空）</span>' +
+          '<input data-f="qr" value="' + esc(x.qr) + '" placeholder="assets/photos/wechat-qr.png"></label>' +
+          toolsHTML();
+        $$('[data-f]', row).forEach((inp) => {
+          inp.addEventListener('input', () => { x[inp.dataset.f] = inp.value; commit(); });
+        });
+        wireTools(row, state.socials, i);
+        box.appendChild(row);
       });
-      wireTools(row, state.socials, i);
-      socialBox.appendChild(row);
     });
   }
 
@@ -1366,29 +1528,182 @@
     state.avatar = ''; renderAvatarPreview(); commit();
   });
 
-  /* —— 增删 —— */
-  $('#addStat').addEventListener('click', () => {
-    state.stats.push({ n: '0', l: '说明' }); renderEditorLists(); commit();
-  });
-  $('#addFact').addEventListener('click', () => {
-    state.facts.push({ k: '新的一项', v: '内容' }); renderEditorLists(); commit();
-  });
-  $('#addCategory').addEventListener('click', () => {
-    const n = state.categories.length + 1;
-    state.categories.push(normalizeCategory({
-      id: 'node-' + n, glyph: pad2(n), name: '新分类', en: 'CATEGORY',
-      summary: '一句话说明', blocks: [{ type: 'text', title: '小标题', body: '在这里写内容。' }]
-    }, n - 1));
-    renderEditorLists(); commit();
-  });
-  $('#addSocial').addEventListener('click', () => {
-    state.socials.push({ name: '新平台', url: '', note: '', badge: '', qr: '' });
-    renderEditorLists(); commit();
+  /* ══════════════════════════════════════════════════════════════════
+     四、坐标：一键请求浏览器定位，或者自己填
+     页面本身不联网；只有点「📍 定位我」时才会问浏览器要位置。
+     ══════════════════════════════════════════════════════════════════ */
+  /* 这几个用函数声明，因为它们会被更早执行的 updateTelemetry 调到 */
+  function num(v) { return typeof v === 'number' && isFinite(v); }
+  function fmtAxis(v, pos, neg) { return Math.abs(v).toFixed(4) + '° ' + (v >= 0 ? pos : neg); }
+
+  function coordText(c) {
+    if (!c || !num(c.lat) || !num(c.lng)) return '—';
+    return fmtAxis(c.lat, 'N', 'S') + ' · ' + fmtAxis(c.lng, 'E', 'W');
+  }
+
+  function agoText(t) {
+    if (!t) return '';
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 15) return '刚刚';
+    if (s < 60) return s + ' 秒前';
+    if (s < 3600) return Math.round(s / 60) + ' 分钟前';
+    if (s < 86400) return Math.round(s / 3600) + ' 小时前';
+    return Math.round(s / 86400) + ' 天前';
+  }
+
+  function tzText() {
+    const off = -new Date().getTimezoneOffset() / 60;
+    return 'GMT' + (off >= 0 ? '+' : '') + off;
+  }
+
+  function renderCoords() {
+    const val = $('#coordVal'), meta = $('#coordMeta');
+    if (!val || !meta) return;
+    const c = state.coords || {};
+    val.textContent = coordText(c);
+    if (!num(c.lat) || !num(c.lng)) {
+      meta.textContent = '还没有坐标，点「📍 定位我」或「手填」';
+      return;
+    }
+    const bits = [c.source === 'gps' ? 'GPS 定位' : '手填'];
+    if (c.acc) bits.push('精度 ±' + Math.round(c.acc) + ' 米');
+    if (c.at) bits.push(agoText(c.at));
+    if (watchId !== null) bits.push('跟随中');
+    meta.innerHTML = (watchId !== null ? '<i class="live-dot"></i>' : '') + esc(bits.join(' · '));
+  }
+
+  function fillCoordForm() {
+    const c = state.coords || {};
+    if ($('#f-lat')) $('#f-lat').value = num(c.lat) ? String(c.lat) : '';
+    if ($('#f-lng')) $('#f-lng').value = num(c.lng) ? String(c.lng) : '';
+  }
+
+  function setCoords(lat, lng, extra) {
+    state.coords = Object.assign({
+      lat: Number(lat), lng: Number(lng), acc: 0, at: Date.now(), source: 'manual'
+    }, extra || {});
+    renderCoords();
+    commit();
+  }
+
+  function gpsFail(err) {
+    toast({
+      1: '你拒绝了定位权限。可以在地址栏左侧的图标里重新允许，或者直接手填坐标。',
+      2: '暂时拿不到位置：系统定位可能关着，或信号太弱。',
+      3: '定位超时了，再试一次或直接手填。'
+    }[err && err.code] || '定位失败，可以直接手填坐标。');
+  }
+
+  function stopFollow() {
+    if (watchId === null) return;
+    try { navigator.geolocation.clearWatch(watchId); } catch (e) {}
+    watchId = null;
+    const b = $('#locFollow');
+    if (b) { b.classList.remove('on'); b.textContent = '跟随'; }
+    renderCoords();
+  }
+
+  function locate() {
+    if (!navigator.geolocation) { toast('这个浏览器不支持定位，请手填'); return; }
+    if (location.protocol === 'file:') {
+      toast('用 file:// 打开时浏览器禁止定位；请用线上地址，或直接手填');
+      return;
+    }
+    toast('正在定位…');
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const c = pos.coords;
+      setCoords(c.latitude, c.longitude, {
+        acc: Math.round(c.accuracy || 0), source: 'gps'
+      });
+      toast('已定位：' + coordText(state.coords));
+      reverseGeocode(c.latitude, c.longitude);
+    }, gpsFail, { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
+  }
+
+  function toggleFollow() {
+    if (watchId !== null) { stopFollow(); toast('已停止跟随'); return; }
+    if (!navigator.geolocation) { toast('这个浏览器不支持定位'); return; }
+    if (location.protocol === 'file:') { toast('用 file:// 打开时浏览器禁止定位'); return; }
+    watchId = navigator.geolocation.watchPosition((pos) => {
+      const c = pos.coords;
+      setCoords(c.latitude, c.longitude, { acc: Math.round(c.accuracy || 0), source: 'gps' });
+    }, gpsFail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 });
+    const b = $('#locFollow');
+    if (b) { b.classList.add('on'); b.textContent = '跟随中'; }
+    toast('开始跟随你的位置（关掉页面就停）');
+    renderCoords();
+  }
+
+  /* 想要城市名时才会请求一次公开的 OSM 反查；失败也只影响城市名。 */
+  async function reverseGeocode(lat, lng) {
+    if (typeof fetch !== 'function') return;
+    try {
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), 8000) : null;
+      const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10' +
+        '&accept-language=zh-CN&lat=' + lat.toFixed(4) + '&lon=' + lng.toFixed(4);
+      const res = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
+      if (timer) clearTimeout(timer);
+      const data = await res.json();
+      const a = (data && data.address) || {};
+      const city = a.city || a.town || a.county || a.state || a.region || '';
+      const country = a.country || '';
+      if (city || country) {
+        state.location = [city, country].filter(Boolean).join(' · ') + ' · ' + tzText();
+        renderAll();
+        commit();
+        toast('已定位到 ' + (city || country));
+      }
+    } catch (e) {
+      toast('已拿到坐标；城市名可以手填');
+    }
+  }
+
+  if ($('#locBtn')) $('#locBtn').addEventListener('click', locate);
+  if ($('#coordNow')) $('#coordNow').addEventListener('click', locate);
+  if ($('#locFollow')) $('#locFollow').addEventListener('click', toggleFollow);
+  if ($('#locEdit')) {
+    $('#locEdit').addEventListener('click', () => {
+      if (isOpen('coord')) { setOpen('coord', false); return; }
+      fillCoordForm();
+      setOpen('coord', true);
+    });
+  }
+  if ($('#coordDone')) {
+    $('#coordDone').addEventListener('click', () => {
+      const la = parseFloat($('#f-lat') ? $('#f-lat').value : '');
+      const ln = parseFloat($('#f-lng') ? $('#f-lng').value : '');
+      if (num(la) && num(ln)) {
+        setCoords(la, ln, { source: 'manual' });
+        toast('坐标已保存：' + coordText(state.coords));
+      } else if ($('#f-lat') && $('#f-lat').value !== '' && $('#f-lng').value !== '') {
+        toast('纬度要填 -90~90，经度要填 -180~180');
+      }
+    });
+  }
+  if ($('#coordClear')) {
+    $('#coordClear').addEventListener('click', () => {
+      state.coords = {};
+      fillCoordForm();
+      renderCoords();
+      commit();
+      toast('坐标已清空');
+    });
+  }
+  ['f-lat', 'f-lng'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const la = parseFloat($('#f-lat').value);
+      const ln = parseFloat($('#f-lng').value);
+      if (!num(la) || !num(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) return;
+      setCoords(la, ln, { source: 'manual' });
+    });
   });
 
   /* —— 导出 / 复制 / 重置 —— */
   const configText = () =>
-    '/* 由编辑面板生成 · 用它覆盖 profile.js 即可永久生效 */\n' +
+    '/* 由页面上的编辑功能生成 · 用它覆盖 profile.js 即可永久生效 */\n' +
     'window.PROFILE = ' + JSON.stringify(state, null, 2) + ';\n';
 
   $('#exportBtn').addEventListener('click', () => {
@@ -1407,7 +1722,7 @@
   $('#resetBtn').addEventListener('click', () => {
     localStorage.removeItem(STORE_KEY);
     state = clone(DEFAULTS);
-    syncFields(); commit();
+    renderEditorLists(); syncFields(); commit();
     toast('已恢复为 profile.js 里的内容');
   });
 
@@ -1415,6 +1730,7 @@
   renderAll();
   route();
   syncFields();
+  syncOpenButtons();
   attachTilt($('.console'), 4);
   setInterval(updateTelemetry, 1000);
   setTimeout(() => { settle = true; }, 1500);

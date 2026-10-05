@@ -40,13 +40,12 @@
       </span>
     </a>
     <nav class="hud-nav" id="hudNav"></nav>
-    <button class="hud-edit" id="hudEdit" type="button" title="编辑我的主页（快捷键 Ctrl / ⌘ + E）">
+    <button class="hud-edit" id="hudEdit" type="button" title="编辑本页内容（Ctrl / ⌘ + E）">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
       </svg>
-      <span>编辑</span>
+      <span>编辑本页</span>
     </button>
     <div class="hud-status">
       <span class="live"><i></i><span class="mono" id="hudStat">ONLINE</span></span>
@@ -57,23 +56,33 @@
 
 <main id="top">
 
-  <!-- ══════════════ 首页：分类入口 ══════════════ -->
+  <!-- ══════════════ 首页 ══════════════ -->
   <section class="view" id="view-home">
 
     <div class="wrap hero">
       <div class="hero-left">
+        <button class="mod-edit" data-open="hero" type="button" title="改姓名 / 主张 / 头像">
+          <span class="lbl">✎ 改首屏</span>
+        </button>
         <span class="chip-status reveal"><i class="dot"></i><span id="available">开放合作</span></span>
         <h1 class="hero-name reveal" id="name">你的名字</h1>
         <p class="hero-role reveal" id="role">身份</p>
         <p class="hero-statement reveal" id="statement"></p>
+        <div class="chips hero-tags reveal" id="focusList"></div>
       </div>
 
       <!-- 实时读数 -->
       <aside class="console reveal" aria-label="实时读数">
         <div class="console-bar">
           <span class="mono">实时读数</span>
-          <span class="mono">Live</span>
+          <span class="console-bar-right">
+            <span class="mono">Live</span>
+            <button class="mod-edit sm" data-open="console" type="button" title="编辑信息行">
+              <span class="lbl">✎</span>
+            </button>
+          </span>
         </div>
+
         <div class="console-id">
           <div class="avatar" id="avatar" role="button" tabindex="0"
                aria-label="点击上传本地照片作为头像" title="点击上传本地照片"></div>
@@ -82,6 +91,43 @@
             <div class="mono cid-loc" id="cardLocation">城市</div>
           </div>
         </div>
+
+        <!-- ── 坐标：可实时定位，也可手填 ── -->
+        <div class="coord" id="coord">
+          <div class="coord-top">
+            <span class="mono">坐标</span>
+            <span class="coord-btns">
+              <button class="mini-btn" id="locBtn" type="button">📍 定位我</button>
+              <button class="mini-btn ghost" id="locFollow" type="button" title="持续跟随你的位置">跟随</button>
+              <button class="mini-btn ghost" id="locEdit" type="button">手填</button>
+            </span>
+          </div>
+          <div class="mono coord-val" id="coordVal">—</div>
+          <div class="coord-meta" id="coordMeta">还没有坐标，点「定位我」或「手填」</div>
+
+          <div class="drawer inline" id="coordForm" data-drawer="coord" hidden>
+            <div class="drawer-head">
+              <span class="mono">手填坐标</span>
+              <button class="mini-btn" id="coordDone" data-done="coord" type="button">✓ 完成</button>
+            </div>
+            <div class="drawer-body">
+              <label class="field"><span>城市 / 时区</span><input id="f-location" type="text" /></label>
+              <div class="two">
+                <label class="field"><span>纬度 -90 ~ 90</span>
+                  <input id="f-lat" type="number" step="0.000001" min="-90" max="90" /></label>
+                <label class="field"><span>经度 -180 ~ 180</span>
+                  <input id="f-lng" type="number" step="0.000001" min="-180" max="180" /></label>
+              </div>
+              <div class="row-tools">
+                <button class="mini-btn ghost" id="coordNow" type="button">📍 用浏览器定位</button>
+                <button class="mini-btn danger" id="coordClear" type="button">清空坐标</button>
+              </div>
+              <p class="hint">保存后显示成 <code>31.2304° N · 121.4737° E</code>。
+                浏览器定位需要 https 打开（线上地址可以）。</p>
+            </div>
+          </div>
+        </div>
+
         <ul class="console-rows" id="factsList"></ul>
         <div class="meter">
           <span class="mono">FPS</span>
@@ -97,21 +143,116 @@
       </aside>
     </div>
 
+    <!-- ── 首屏抽屉 ── -->
+    <div class="wrap">
+      <div class="drawer" data-drawer="hero" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · 首屏</span>
+          <button class="mini-btn" data-done="hero" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body two-col">
+          <div>
+            <label class="field"><span>姓名</span><input id="f-name" type="text" /></label>
+            <label class="field"><span>左上角显示</span><input id="f-brand" type="text" /></label>
+            <label class="field"><span>首字母（无头像时显示）</span><input id="f-monogram" type="text" maxlength="2" /></label>
+          </div>
+          <div>
+            <label class="field"><span>身份 / 头衔</span><input id="f-role" type="text" /></label>
+            <label class="field"><span>状态标签</span><input id="f-available" type="text" /></label>
+            <label class="field"><span>标签（用「、」分隔）</span><textarea id="f-focus" rows="2"></textarea></label>
+          </div>
+          <div class="span2">
+            <label class="field"><span>一句话主张（12–20 字最佳）</span><textarea id="f-statement" rows="2"></textarea></label>
+            <label class="field"><span>高亮其中一段（可留空）</span><input id="f-accent" type="text" /></label>
+          </div>
+          <div class="span2 avatar-block">
+            <span class="blk-label mono">头像</span>
+            <div class="avatar-row">
+              <div class="avatar big" id="edAvatar"></div>
+              <div class="avatar-actions">
+                <label class="btn btn-primary wide upload-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+                  </svg>
+                  从电脑里选一张照片
+                  <input id="avatarFile" type="file" accept="image/*" hidden />
+                </label>
+                <button class="mini-btn ghost" id="avatarClear" type="button">用首字母</button>
+                <p class="hint">方图最好看；会自动压缩后存在这台浏览器里。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 实时读数抽屉 ── -->
+    <div class="wrap">
+      <div class="drawer" data-drawer="console" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · 实时读数</span>
+          <button class="mini-btn" data-done="console" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body">
+          <div data-slot="facts"></div>
+          <button class="mini-btn ghost add" data-add="facts" type="button">+ 添加一行</button>
+          <p class="hint">这几行显示在首屏右侧的读数卡里。卡上的头像点一下就换，
+            坐标用「📍 定位我」或「手填」。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 我的几面 ── -->
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="mono">Sides of me</span>
         <h2>我的几面</h2>
         <span class="mono sec-hint">点开任意一面 →</span>
+        <button class="mod-edit inline" data-open="cats" type="button" title="增删每一面、改名字">
+          <span class="lbl">✎ 管理</span>
+        </button>
       </div>
       <div class="facet-grid" id="facetGrid"></div>
+
+      <div class="drawer" data-drawer="cats" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · 我的几面</span>
+          <button class="mini-btn" data-done="cats" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body">
+          <div data-slot="cats"></div>
+          <button class="mini-btn ghost add" data-add="cats" type="button">+ 添加一面</button>
+          <p class="hint">也可以进到某一面里，用右上角的「✎ 编辑这一面」改它的内容。</p>
+        </div>
+      </div>
     </div>
 
+    <!-- ── 三个数字 ── -->
     <div class="wrap">
+      <button class="mod-edit" data-open="stats" type="button" title="改这三个数字">
+        <span class="lbl">✎ 改数字</span>
+      </button>
       <div class="stat-row" id="statsList"></div>
+
+      <div class="drawer" data-drawer="stats" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · 数字</span>
+          <button class="mini-btn" data-done="stats" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body">
+          <div data-slot="stats"></div>
+          <button class="mini-btn ghost add" data-add="stats" type="button">+ 添加一项</button>
+        </div>
+      </div>
     </div>
 
+    <!-- ── 联系方式与社交 ── -->
     <div class="wrap">
       <div class="contact-strip reveal">
+        <button class="mod-edit" data-open="socials" type="button" title="改邮箱和社交账号">
+          <span class="lbl">✎ 编辑联系</span>
+        </button>
         <div class="cs-left">
           <span class="mono">// CONNECT</span>
           <h3 id="emailLabel">有想法，随时聊聊。</h3>
@@ -122,8 +263,24 @@
         </div>
         <div class="social-grid" id="socialGrid"></div>
       </div>
-    </div>
 
+      <div class="drawer" data-drawer="socials" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · 联系方式与社交</span>
+          <button class="mini-btn" data-done="socials" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body">
+          <div class="two">
+            <label class="field"><span>邮箱</span><input id="f-email" type="text" /></label>
+            <label class="field"><span>联系区标题</span><input id="f-emailLabel" type="text" /></label>
+          </div>
+          <div data-slot="socials"></div>
+          <button class="mini-btn ghost add" data-add="socials" type="button">+ 添加社交账号</button>
+          <p class="hint">平台名随便写。链接留空则不可点击（适合微信号）；
+            填二维码路径，鼠标移上去会弹出二维码。</p>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ══════════════ 分类详情 ══════════════ -->
@@ -138,6 +295,14 @@
           回到我的几面
         </button>
         <span class="mono crumb" id="crumb">我的几面</span>
+        <button class="inline-edit" id="editFacet" data-open="detail" type="button"
+                title="改这一面的名字、简介和全部内容">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+          <span class="lbl">编辑这一面</span>
+        </button>
       </div>
 
       <div class="detail-head">
@@ -148,6 +313,18 @@
       </div>
 
       <div class="blocks" id="blocks"></div>
+
+      <!-- ── 这一面的编辑抽屉 ── -->
+      <div class="drawer" data-drawer="detail" hidden>
+        <div class="drawer-head">
+          <span class="mono">编辑 · <em id="dEditName">这一面</em></span>
+          <button class="mini-btn" data-done="detail" type="button">✓ 完成</button>
+        </div>
+        <div class="drawer-body">
+          <div data-slot="detail"></div>
+          <p class="hint">改完点右上角「✓ 完成」收起；改动已经自动保存。</p>
+        </div>
+      </div>
 
       <button class="back-btn back-bottom" id="backBtn2" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
@@ -165,134 +342,59 @@
   <span id="copyright"></span>
   <span class="foot-right">
     <span class="mono" id="footerMono">背景光点由浏览器实时渲染</span>
-    <button class="foot-edit" id="footEdit" type="button">
+    <button class="foot-edit" id="footEdit" data-open="footer" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
       </svg>
-      编辑这个页面
+      <span class="lbl">编辑页脚与备份</span>
     </button>
   </span>
+
+  <div class="drawer" data-drawer="footer" hidden>
+    <div class="drawer-head">
+      <span class="mono">编辑 · 页脚与备份</span>
+      <button class="mini-btn" data-done="footer" type="button">✓ 完成</button>
+    </div>
+    <div class="drawer-body">
+      <label class="field"><span>页脚版权</span><input id="f-copyright" type="text" /></label>
+      <span class="blk-label mono">存档</span>
+      <p class="hint">改动都自动存在这台浏览器里。要让所有人都看到，
+        点「下载 profile.js」覆盖同名文件，然后 <code>git push</code>。</p>
+      <div class="row-tools">
+        <button class="mini-btn" id="exportBtn" type="button">下载 profile.js</button>
+        <button class="mini-btn ghost" id="copyConfig" type="button">复制配置</button>
+        <button class="mini-btn danger" id="resetBtn" type="button">恢复默认</button>
+      </div>
+    </div>
+  </div>
 </footer>
 
-<!-- 直接上传头像（不必先打开编辑面板） -->
+<!-- 直接上传头像（不必先打开任何面板） -->
 <input id="avatarQuick" type="file" accept="image/*" hidden />
 
-<!-- ══ 编辑面板 ══ -->
-<button class="fab" id="fab" type="button" title="编辑我的主页 (Ctrl+E)" aria-label="编辑我的主页">
+<!-- ══ 右下角：编辑入口（按当前页面给菜单） ══ -->
+<button class="fab" id="fab" type="button" aria-expanded="false" title="编辑 (Ctrl / ⌘ + E)">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M12 20h9" />
     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
   </svg>
-  <span>编辑主页</span>
+  <span>编辑</span>
 </button>
+
+<div class="menu" id="menu" hidden>
+  <div class="menu-head mono" id="menuHead">编辑本页</div>
+  <div class="menu-list" id="menuList"></div>
+</div>
 
 <!-- ══ 首次访问提示 ══ -->
 <aside class="coach" id="coach" hidden>
   <button class="coach-x" id="coachX" type="button" aria-label="知道了">✕</button>
-  <b>这里可以改成一个「你」的页面</b>
-  点右下角 <em>编辑主页</em>（或按 Ctrl / ⌘ + E），就能改文字、
-  <em>上传本地照片</em>当头像、加照片和社交账号。改动自动保存。
-  <span class="coach-go" id="coachGo">现在就试试 →</span>
-</aside>
-
-<aside class="editor" id="editor" aria-label="编辑面板" aria-hidden="true">
-  <div class="editor-head">
-    <div>
-      <div class="mono">EDITOR v2</div>
-      <div class="editor-title">编辑我的主页</div>
-    </div>
-    <button class="icon-btn" id="closeEditor" type="button" aria-label="关闭">✕</button>
-  </div>
-
-  <div class="editor-body">
-
-    <section class="ed-sec ed-avatar">
-      <h3>头像 · 上传本地照片</h3>
-      <div class="avatar-row">
-        <div class="avatar big" id="edAvatar"></div>
-        <div class="avatar-actions">
-          <label class="btn btn-primary wide upload-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
-            </svg>
-            从电脑里选一张照片
-            <input id="avatarFile" type="file" accept="image/*" hidden />
-          </label>
-          <button class="mini-btn ghost" id="avatarClear" type="button">用首字母</button>
-          <p class="hint">方图最好看；会自动压缩后存在这台浏览器里。</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="ed-sec">
-      <h3>基本资料</h3>
-      <label class="field"><span>姓名</span><input id="f-name" type="text" /></label>
-      <label class="field"><span>左上角显示</span><input id="f-brand" type="text" /></label>
-      <label class="field"><span>首字母（无头像时显示）</span><input id="f-monogram" type="text" maxlength="2" /></label>
-      <label class="field"><span>身份 / 头衔</span><input id="f-role" type="text" /></label>
-      <label class="field"><span>所在城市</span><input id="f-location" type="text" /></label>
-      <label class="field"><span>状态标签</span><input id="f-available" type="text" /></label>
-    </section>
-
-    <section class="ed-sec">
-      <h3>一句话主张</h3>
-      <label class="field"><span>主张（12–20 字最佳）</span><textarea id="f-statement" rows="2"></textarea></label>
-      <label class="field"><span>高亮其中一段（可留空）</span><input id="f-accent" type="text" /></label>
-    </section>
-
-    <section class="ed-sec">
-      <h3>标签</h3>
-      <label class="field"><span>用「、」或逗号分隔</span><textarea id="f-focus" rows="2"></textarea></label>
-    </section>
-
-    <section class="ed-sec">
-      <h3>首页数字</h3>
-      <div id="edStats"></div>
-      <button class="mini-btn ghost add" id="addStat" type="button">+ 添加一项</button>
-    </section>
-
-    <section class="ed-sec">
-      <h3>控制台信息行</h3>
-      <div id="edFacts"></div>
-      <button class="mini-btn ghost add" id="addFact" type="button">+ 添加一行</button>
-    </section>
-
-    <section class="ed-sec">
-      <h3>我的几面 <em id="catCount"></em></h3>
-      <div id="edCategories"></div>
-      <button class="mini-btn ghost add" id="addCategory" type="button">+ 添加一面</button>
-      <p class="hint">每一面里的「内容块」可以自由增删、上下移动、切换类型。
-        列表类内容用换行分隔；带 <code>|</code> 的格式见每块里的灰色提示。</p>
-    </section>
-
-    <section class="ed-sec">
-      <h3>社交平台</h3>
-      <div id="edSocials"></div>
-      <button class="mini-btn ghost add" id="addSocial" type="button">+ 添加社交账号</button>
-      <p class="hint">平台名随便写。链接留空则不可点击（适合微信号）；
-        填二维码路径，鼠标移上去会弹出二维码。</p>
-    </section>
-
-    <section class="ed-sec">
-      <h3>联系与页脚</h3>
-      <label class="field"><span>邮箱</span><input id="f-email" type="text" /></label>
-      <label class="field"><span>联系区标题</span><input id="f-emailLabel" type="text" /></label>
-      <label class="field"><span>页脚版权</span><input id="f-copyright" type="text" /></label>
-    </section>
-
-  </div>
-
-  <div class="editor-foot">
-    <button class="btn btn-primary wide" id="exportBtn" type="button">下载 profile.js</button>
-    <div class="foot-row">
-      <button class="mini-btn ghost" id="copyConfig" type="button">复制配置</button>
-      <button class="mini-btn ghost" id="resetBtn" type="button">恢复默认</button>
-    </div>
-    <p class="hint">改动会自动存在这台浏览器里。要永久生效，点「下载 profile.js」覆盖原文件。</p>
-  </div>
+  <b>每一块内容都在自己旁边编辑</b>
+  鼠标移到任意一块上，点它角落的 <em>✎</em>；头像点一下就能换本机照片，
+  坐标可以 <em>📍 定位</em> 也可以手填。改完点「✓ 完成」。
+  <span class="coach-go" id="coachGo">先改首屏 →</span>
 </aside>
 
 <!-- ══ 大图查看 ══ -->
