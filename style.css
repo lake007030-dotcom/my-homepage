@@ -46,7 +46,8 @@
   --ease:cubic-bezier(.22,.61,.36,1);
   --ease-liquid:cubic-bezier(.16,1.02,.24,1);
   --maxw:1140px;
-  --r:4px;
+  --r:22px;        /* 大面板的圆角（液态玻璃的圆润度主要看它） */
+  --r-sm:12px;     /* 小控件：输入框、按钮、缩略图 */
   --shadow:0 26px 60px -44px rgba(0,0,0,.95);
 }
 
@@ -930,6 +931,8 @@ h1,h2,h3{ text-wrap:balance; }
 .mod-edit.sm{ position:static; height:24px; padding:0 9px; font-size:11px; }
 .mod-edit.inline{ position:static; }
 .hero-left{ position:relative; }
+/* 状态胶囊和它的 ✎ 排在同一行，编辑入口才不像浮在空中 */
+.hero-top{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .hero-left > .mod-edit{ top:2px; right:0; }
 .contact-strip{ position:relative; }
 .contact-strip > .mod-edit{ top:clamp(16px,2.4vw,24px); right:clamp(18px,3vw,30px); }
@@ -1211,3 +1214,59 @@ footer .drawer{ flex-basis:100%; width:100%; }
   border-color:var(--accent); }
 .geo-x{ position:absolute; top:12px; right:12px; }
 @media (max-width:520px){ .geo-card{ padding:20px 18px 18px; } }
+
+/* ══════════════════════════════════════════════════════════════════════
+   液态玻璃：圆角与「厚度」
+   1) 大面板圆角统一到 --r（22px），小控件到 --r-sm；
+   2) 玻璃要有厚度才不会像贴纸：顶部一道内高光 + 顶部一片极淡的反射；
+   3) 网格拼出来的面板靠外圈裁切，四角才不会露出直角。
+   ══════════════════════════════════════════════════════════════════════ */
+
+.console, .contact-strip, .block, .facet, .drawer, .menu, .geo-card,
+.coach, .qr-pop, .photo, .social-grid, .link-grid, .lightbox img, .lightbox figure{
+  border-radius:var(--r);
+}
+.console, .contact-strip, .block, .facet, .drawer, .menu, .geo-card, .coach, .qr-pop{
+  border-color:rgba(var(--surf-rgb),.13);
+  box-shadow:inset 0 1px 0 rgba(var(--surf-rgb),.085),
+             inset 0 26px 44px -34px rgba(var(--surf-rgb),.07),
+             0 26px 60px -46px rgba(0,0,0,.9);
+}
+.facet:hover, .photo:hover, .block:hover{
+  border-color:rgba(var(--surf-rgb),.22);
+  box-shadow:inset 0 1px 0 rgba(var(--surf-rgb),.10),
+             inset 0 26px 44px -34px rgba(var(--surf-rgb),.08),
+             0 30px 66px -44px rgba(0,0,0,.95);
+}
+/* 网格面板：把格子的直角裁掉，外圈才是圆的 */
+.social-grid, .link-grid{ overflow:hidden; }
+
+/* ── 编辑器里的行 / 内容块：比大面板小一档 ─────────────────────────── */
+.blk, .rows .row, #edCategories > .row, .photo-rows > .row, .album-rows > .album-row{
+  border-radius:16px;
+}
+.album-photos{ border-radius:0 0 16px 16px; }
+
+/* ── 小控件 ───────────────────────────────────────────────────────── */
+.field input, .field textarea, .row input, .row textarea, .row select,
+.mini-btn, .icon-btn, .copy, .menu-list button, .blk-toggle, .blk-kind,
+.row-top .thumb, .badge, .hint code, .geo-body code, .avatar-block{
+  border-radius:var(--r-sm);
+}
+.blk-kind, .blk-toggle{ border-radius:999px; }
+.blk-kind{ padding:4px 11px; }
+.row-top .thumb{ border-radius:15px; }
+.menu-list{ padding:6px; }
+.menu-list button{ border-radius:14px; }
+
+/* ── 本来就是胶囊的，统一一下 ─────────────────────────────────────── */
+.btn, .fab, .mod-edit, .inline-edit, .chip, .chip-status, .hud-edit,
+.theme-chip, .foot-edit, .toast, .photo-idx, .photo-album, .blk-no{
+  border-radius:999px;
+}
+.toast{ padding:11px 22px; }
+.photo-idx, .photo-album{ padding:4px 10px; }
+
+/* ── 圆形元素 ─────────────────────────────────────────────────────── */
+.avatar, .avatar.big, .avatar.small, .lb-close{ border-radius:50%; }
+.brand-mark{ border-radius:10px; }

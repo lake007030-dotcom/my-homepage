@@ -13,7 +13,12 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* 无头浏览器默认报「减少动效」，截图时用 ?shot=1&motion=on 强制打开动画 */
+  try {
+    const _q = new URLSearchParams(location.search);
+    if (_q.has('shot') && _q.get('motion') === 'on') reduceMotion = false;
+  } catch (e) {}
 
   /* ══ 工具 ══════════════════════════════════════════════════════════ */
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -2003,4 +2008,21 @@
   attachTilt($('.console'), 4);
   setInterval(updateTelemetry, 1000);
   setTimeout(() => { settle = true; }, 1500);
+
+  /* —— 截图用的开关（平时访问完全不受影响）：
+        ?shot=1&theme=paper&open=hero&y=900&go=%23/about
+        只有带 ?shot 才会执行，用来把某个状态摆好给我「看」一眼。 —— */
+  (function shotHook() {
+    let p = null;
+    try { p = new URLSearchParams(location.search); } catch (e) { return; }
+    if (!p || !p.has('shot')) return;
+    const t = p.get('theme');
+    if (t) applyTheme(t);
+    const go = p.get('go');
+    if (go) location.hash = go;
+    const y = parseInt(p.get('y') || '0', 10);
+    if (y > 0) setTimeout(() => { try { scrollTo(0, y); } catch (e) {} }, 60);
+    const open = p.get('open');
+    if (open) setTimeout(() => setOpen(open, true), 150);
+  })();
 })();
