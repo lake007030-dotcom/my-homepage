@@ -3,10 +3,23 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#0A0A0B" />
+<meta name="theme-color" content="#000000" />
 <meta name="description" content="个人主页 · 我的几面 · 人生记录 · 联系方式" />
 <title>个人主页</title>
 <link rel="stylesheet" href="style.css" />
+<script>
+/* 先按上次选的配色上色，免得刷新时先闪一下黑底再变白 */
+(function () {
+  try {
+    var t = localStorage.getItem('my-homepage-theme');
+    if (t !== 'graphite' && t !== 'paper') t = 'obsidian';
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content',
+      { obsidian: '#000000', graphite: '#131313', paper: '#F1F1EF' }[t]);
+  } catch (e) {}
+})();
+</script>
 </head>
 
 <body>
@@ -107,23 +120,32 @@
 
           <div class="drawer inline" id="coordForm" data-drawer="coord" hidden>
             <div class="drawer-head">
-              <span class="mono">手填坐标</span>
+              <div class="d-ttl"><b>手填坐标</b><span>城市名可以留空，只填经纬度也行</span></div>
               <button class="mini-btn" id="coordDone" data-done="coord" type="button">✓ 完成</button>
             </div>
             <div class="drawer-body">
-              <label class="field"><span>城市 / 时区</span><input id="f-location" type="text" /></label>
-              <div class="two">
-                <label class="field"><span>纬度 -90 ~ 90</span>
-                  <input id="f-lat" type="number" step="0.000001" min="-90" max="90" /></label>
-                <label class="field"><span>经度 -180 ~ 180</span>
-                  <input id="f-lng" type="number" step="0.000001" min="-180" max="180" /></label>
+              <div class="ed-sec">
+                <h3>位置</h3>
+                <label class="field"><span>城市 / 时区 <em>（显示在读数卡上）</em></span>
+                  <input id="f-location" type="text" placeholder="上海 · GMT+8" /></label>
+                <div class="two">
+                  <label class="field"><span>纬度 <em>-90 ~ 90</em></span>
+                    <input id="f-lat" type="number" step="0.000001" min="-90" max="90" /></label>
+                  <label class="field"><span>经度 <em>-180 ~ 180</em></span>
+                    <input id="f-lng" type="number" step="0.000001" min="-180" max="180" /></label>
+                </div>
               </div>
-              <div class="row-tools">
-                <button class="mini-btn ghost" id="coordNow" type="button">📍 用浏览器定位</button>
-                <button class="mini-btn danger" id="coordClear" type="button">清空坐标</button>
+              <div class="ed-sec">
+                <h3>不想手填？</h3>
+                <div class="row-tools">
+                  <button class="mini-btn ghost" id="coordNow" type="button">📍 用浏览器定位</button>
+                  <button class="mini-btn ghost" id="coordNet" type="button">🌐 用网络粗略定位</button>
+                  <button class="mini-btn danger" id="coordClear" type="button">清空坐标</button>
+                </div>
+                <p class="hint">填完显示成 <code>31.2304° N · 121.4737° E</code>。
+                  浏览器定位要 https 打开（线上地址可以）并且你点过「允许」；
+                  网络定位不需要任何权限，但只精确到城市。</p>
               </div>
-              <p class="hint">保存后显示成 <code>31.2304° N · 121.4737° E</code>。
-                浏览器定位需要 https 打开（线上地址可以）。</p>
             </div>
           </div>
         </div>
@@ -147,26 +169,37 @@
     <div class="wrap">
       <div class="drawer" data-drawer="hero" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · 首屏</span>
+          <div class="d-ttl"><b>首屏</b><span>姓名 · 身份 · 主张 · 标签 · 头像</span></div>
           <button class="mini-btn" data-done="hero" type="button">✓ 完成</button>
         </div>
-        <div class="drawer-body two-col">
-          <div>
-            <label class="field"><span>姓名</span><input id="f-name" type="text" /></label>
-            <label class="field"><span>左上角显示</span><input id="f-brand" type="text" /></label>
-            <label class="field"><span>首字母（无头像时显示）</span><input id="f-monogram" type="text" maxlength="2" /></label>
+        <div class="drawer-body">
+          <div class="ed-sec">
+            <h3>基本信息</h3>
+            <div class="two">
+              <label class="field"><span>姓名</span><input id="f-name" type="text" /></label>
+              <label class="field"><span>左上角显示</span><input id="f-brand" type="text" /></label>
+            </div>
+            <label class="field"><span>首字母 <em>（没有头像时显示这个字）</em></span>
+              <input id="f-monogram" type="text" maxlength="2" /></label>
           </div>
-          <div>
-            <label class="field"><span>身份 / 头衔</span><input id="f-role" type="text" /></label>
-            <label class="field"><span>状态标签</span><input id="f-available" type="text" /></label>
-            <label class="field"><span>标签（用「、」分隔）</span><textarea id="f-focus" rows="2"></textarea></label>
+          <div class="ed-sec">
+            <h3>身份与标签</h3>
+            <div class="two">
+              <label class="field"><span>身份 / 头衔</span><input id="f-role" type="text" /></label>
+              <label class="field"><span>状态标签</span><input id="f-available" type="text" /></label>
+            </div>
+            <label class="field"><span>标签 <em>（用「、」分隔，显示在名字下面）</em></span>
+              <textarea id="f-focus" rows="2"></textarea></label>
           </div>
-          <div class="span2">
-            <label class="field"><span>一句话主张（12–20 字最佳）</span><textarea id="f-statement" rows="2"></textarea></label>
-            <label class="field"><span>高亮其中一段（可留空）</span><input id="f-accent" type="text" /></label>
+          <div class="ed-sec">
+            <h3>一句话主张</h3>
+            <label class="field"><span>主张 <em>（12–20 字最好看）</em></span>
+              <textarea id="f-statement" rows="2"></textarea></label>
+            <label class="field"><span>高亮其中一段 <em>（可留空）</em></span>
+              <input id="f-accent" type="text" /></label>
           </div>
-          <div class="span2 avatar-block">
-            <span class="blk-label mono">头像</span>
+          <div class="ed-sec">
+            <h3>头像</h3>
             <div class="avatar-row">
               <div class="avatar big" id="edAvatar"></div>
               <div class="avatar-actions">
@@ -191,14 +224,17 @@
     <div class="wrap">
       <div class="drawer" data-drawer="console" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · 实时读数</span>
+          <div class="d-ttl"><b>实时读数</b><span>首屏右侧那张卡里的几行信息</span></div>
           <button class="mini-btn" data-done="console" type="button">✓ 完成</button>
         </div>
         <div class="drawer-body">
-          <div data-slot="facts"></div>
-          <button class="mini-btn ghost add" data-add="facts" type="button">+ 添加一行</button>
-          <p class="hint">这几行显示在首屏右侧的读数卡里。卡上的头像点一下就换，
-            坐标用「📍 定位我」或「手填」。</p>
+          <div class="ed-sec">
+            <h3>信息行 <i class="num" id="factCount">0</i></h3>
+            <div data-slot="facts"></div>
+            <button class="mini-btn ghost add" data-add="facts" type="button">+ 添加一行</button>
+          </div>
+          <p class="hint">右列第一格写「名称」、第二格写「内容」。
+            坐标不在这里改：卡上直接点「📍 定位我」「跟随」或「手填」。</p>
         </div>
       </div>
     </div>
@@ -217,13 +253,17 @@
 
       <div class="drawer" data-drawer="cats" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · 我的几面</span>
+          <div class="d-ttl"><b>我的几面</b><span>增删每一面 · 改名字 · 调顺序</span></div>
           <button class="mini-btn" data-done="cats" type="button">✓ 完成</button>
         </div>
         <div class="drawer-body">
-          <div data-slot="cats"></div>
-          <button class="mini-btn ghost add" data-add="cats" type="button">+ 添加一面</button>
-          <p class="hint">也可以进到某一面里，用右上角的「✎ 编辑这一面」改它的内容。</p>
+          <div class="ed-sec">
+            <h3>全部几面 <i class="num" id="catCount">0</i></h3>
+            <div data-slot="cats"></div>
+            <button class="mini-btn ghost add" data-add="cats" type="button">+ 添加一面</button>
+          </div>
+          <p class="hint">下面每一块就是一张卡片：先改名字，再改里面的内容。
+            也可以进到某一面里，用右上角的「✎ 编辑这一面」只改那一面。</p>
         </div>
       </div>
     </div>
@@ -237,12 +277,16 @@
 
       <div class="drawer" data-drawer="stats" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · 数字</span>
+          <div class="d-ttl"><b>三个数字</b><span>首页中部那三组大数字</span></div>
           <button class="mini-btn" data-done="stats" type="button">✓ 完成</button>
         </div>
         <div class="drawer-body">
-          <div data-slot="stats"></div>
-          <button class="mini-btn ghost add" data-add="stats" type="button">+ 添加一项</button>
+          <div class="ed-sec">
+            <h3>数字 <i class="num" id="statCount">0</i></h3>
+            <div data-slot="stats"></div>
+            <button class="mini-btn ghost add" data-add="stats" type="button">+ 添加一项</button>
+          </div>
+          <p class="hint">第一格是数字本身，第二格是它下面的说明。</p>
         </div>
       </div>
     </div>
@@ -266,18 +310,24 @@
 
       <div class="drawer" data-drawer="socials" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · 联系方式与社交</span>
+          <div class="d-ttl"><b>联系方式与社交</b><span>邮箱 · 平台账号 · 二维码</span></div>
           <button class="mini-btn" data-done="socials" type="button">✓ 完成</button>
         </div>
         <div class="drawer-body">
-          <div class="two">
-            <label class="field"><span>邮箱</span><input id="f-email" type="text" /></label>
-            <label class="field"><span>联系区标题</span><input id="f-emailLabel" type="text" /></label>
+          <div class="ed-sec">
+            <h3>邮箱</h3>
+            <div class="two">
+              <label class="field"><span>邮箱地址</span><input id="f-email" type="text" /></label>
+              <label class="field"><span>联系区标题</span><input id="f-emailLabel" type="text" /></label>
+            </div>
           </div>
-          <div data-slot="socials"></div>
-          <button class="mini-btn ghost add" data-add="socials" type="button">+ 添加社交账号</button>
-          <p class="hint">平台名随便写。链接留空则不可点击（适合微信号）；
-            填二维码路径，鼠标移上去会弹出二维码。</p>
+          <div class="ed-sec">
+            <h3>社交账号 <i class="num" id="socCount">0</i></h3>
+            <div data-slot="socials"></div>
+            <button class="mini-btn ghost add" data-add="socials" type="button">+ 添加社交账号</button>
+            <p class="note">平台名随便写。链接留空则不可点击（适合微信号）；
+              填了二维码路径，鼠标移上去会弹出二维码。</p>
+          </div>
         </div>
       </div>
     </div>
@@ -317,12 +367,12 @@
       <!-- ── 这一面的编辑抽屉 ── -->
       <div class="drawer" data-drawer="detail" hidden>
         <div class="drawer-head">
-          <span class="mono">编辑 · <em id="dEditName">这一面</em></span>
+          <div class="d-ttl"><b id="dEditName">这一面</b><span>名字 · 简介 · 内容块</span></div>
           <button class="mini-btn" data-done="detail" type="button">✓ 完成</button>
         </div>
         <div class="drawer-body">
           <div data-slot="detail"></div>
-          <p class="hint">改完点右上角「✓ 完成」收起；改动已经自动保存。</p>
+          <p class="hint">改完点右上角「✓ 完成」收起；改动已经自动保存，页面上当场就能看到。</p>
         </div>
       </div>
 
@@ -353,18 +403,34 @@
 
   <div class="drawer" data-drawer="footer" hidden>
     <div class="drawer-head">
-      <span class="mono">编辑 · 页脚与备份</span>
+      <div class="d-ttl"><b>界面与备份</b><span>配色 · 页脚文字 · 把改动存下来</span></div>
       <button class="mini-btn" data-done="footer" type="button">✓ 完成</button>
     </div>
     <div class="drawer-body">
-      <label class="field"><span>页脚版权</span><input id="f-copyright" type="text" /></label>
-      <span class="blk-label mono">存档</span>
-      <p class="hint">改动都自动存在这台浏览器里。要让所有人都看到，
-        点「下载 profile.js」覆盖同名文件，然后 <code>git push</code>。</p>
-      <div class="row-tools">
-        <button class="mini-btn" id="exportBtn" type="button">下载 profile.js</button>
-        <button class="mini-btn ghost" id="copyConfig" type="button">复制配置</button>
-        <button class="mini-btn danger" id="resetBtn" type="button">恢复默认</button>
+      <div class="ed-sec">
+        <h3>界面颜色 <em>点一下马上换，选你看着舒服的</em></h3>
+        <div class="theme-row" id="themeRow">
+          <button class="theme-chip" data-theme-set="obsidian" type="button">
+            <i class="sw sw-black"></i>曜石 · 纯黑</button>
+          <button class="theme-chip" data-theme-set="graphite" type="button">
+            <i class="sw sw-grey"></i>石墨 · 深灰</button>
+          <button class="theme-chip" data-theme-set="paper" type="button">
+            <i class="sw sw-white"></i>宣纸 · 浅白</button>
+        </div>
+      </div>
+      <div class="ed-sec">
+        <h3>页脚</h3>
+        <label class="field"><span>版权文字</span><input id="f-copyright" type="text" /></label>
+      </div>
+      <div class="ed-sec">
+        <h3>存档</h3>
+        <p class="note">你的改动先存在这台浏览器里（只有你自己看得见）。
+          想让所有人都看到，就点下面「下载 profile.js」，然后让存档的人把它放进项目里。</p>
+        <div class="row-tools">
+          <button class="mini-btn" id="exportBtn" type="button">下载 profile.js</button>
+          <button class="mini-btn ghost" id="copyConfig" type="button">复制配置</button>
+          <button class="mini-btn danger" id="resetBtn" type="button">恢复默认</button>
+        </div>
       </div>
     </div>
   </div>
@@ -407,6 +473,16 @@
       <span id="lbCaption"></span>
     </figcaption>
   </figure>
+</div>
+
+<!-- ══ 定位权限说明卡（点「📍 定位我」需要权限 / 被拒时出现） ══ -->
+<div class="geo" id="geo" hidden>
+  <div class="geo-card" role="dialog" aria-labelledby="geoTitle">
+    <button class="icon-btn geo-x" id="geoX" type="button" aria-label="关闭">✕</button>
+    <b id="geoTitle">要读取你的位置</b>
+    <div class="geo-body" id="geoBody"></div>
+    <div class="geo-acts" id="geoActs"></div>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden></div>

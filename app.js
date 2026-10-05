@@ -136,6 +136,9 @@
   let state = loadState();
   let settle = false;
   let watchId = null;      /* 坐标「跟随」模式的 watchPosition id（见第四节） */
+  let geoPerm = 'unknown';  /* 定位权限状态：granted / prompt / denied / unknown */
+  /* 坐标来源的中文标签（放在这里是因为读数每秒刷新时会用到） */
+  const SRC_LABEL = { gps: 'GPS 定位', ip: '网络定位 · 约 ±25 公里', manual: '手填' };
   try { settle = !!localStorage.getItem(STORE_KEY); } catch (e) { settle = false; }
 
   function save() {
@@ -152,6 +155,54 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
+     配色：黑 / 灰 / 白 三套单色主题（写在 <html data-theme="..."> 上）
+     颜色本身都在 style.css 的 :root 与 [data-theme] 里，这里只管切换和记忆。
+     ══════════════════════════════════════════════════════════════════ */
+  const THEME_KEY = 'my-homepage-theme';
+  const THEMES = [
+    { id: 'obsidian', name: '曜石 · 纯黑', meta: '#000000' },
+    { id: 'graphite', name: '石墨 · 深灰', meta: '#131313' },
+    { id: 'paper',    name: '宣纸 · 浅白', meta: '#F1F1EF' }
+  ];
+  const themeMeta = (id) => (THEMES.find((t) => t.id === id) || THEMES[0]).meta;
+
+  /* 把 CSS 变量读成 [r,g,b]：支持 #abc / #aabbcc / "12,12,12" / "rgb(1,2,3)" */
+  function cssColor(name, fallback) {
+    let v = '';
+    try {
+      v = String(getComputedStyle(document.documentElement)
+        .getPropertyValue(name) || '').trim();
+    } catch (e) { v = ''; }
+    let m = /^#([0-9a-f]{3})$/i.exec(v);
+    if (m) return m[1].split('').map((c) => parseInt(c + c, 16));
+    m = /^#([0-9a-f]{6})$/i.exec(v);
+    if (m) return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+    const n = v.split(/[,\s]+/).map((x) => parseFloat(x)).filter((x) => isFinite(x));
+    return n.length >= 3 ? n.slice(0, 3) : fallback;
+  }
+
+  /* 画布要用的颜色：光点、连线、高光核心、鼠标微光 */
+  function readPalette() {
+    const ink = cssColor('--ink', [250, 250, 250]);
+    const acc = cssColor('--accent-rgb', [255, 255, 255]);
+    const mid = cssColor('--ink-3', [118, 118, 118]);
+    return { dots: [ink, acc, mid], link: ink, core: ink, glow: acc };
+  }
+
+  function applyTheme(id) {
+    const t = THEMES.some((x) => x.id === id) ? id : 'obsidian';
+    document.documentElement.setAttribute('data-theme', t);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', themeMeta(t));
+    try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+    $$('[data-theme-set]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.themeSet === t);
+    });
+    try { field.retint(); } catch (e) {}   /* 光点跟着重新上色 */
+    return t;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
      一、粒子场：三维投影 + 视差 + 鼠标力场 + 连线星座
      ══════════════════════════════════════════════════════════════════ */
   const field = (() => {
@@ -159,7 +210,9 @@
     if (!canvas) return { count: 0, fps: 0, resize() {} };
     const ctx = canvas.getContext('2d');
 
-    const COLORS = [[239, 235, 228], [201, 169, 106], [150, 144, 136]];
+    /* 光点颜色跟着主题走（从 CSS 变量读，见前面「配色」一节） */
+    let pal = readPalette();
+    let COLORS = pal.dots.slice();
     const small = innerWidth < 760;
     const COUNT = reduceMotion ? 0 : (small ? 52 : 112);
     const LINK_DIST = small ? 92 : 118;
@@ -187,18 +240,30 @@
 
     /* 预渲染光点贴图：比每帧为上百个粒子新建径向渐变快一个数量级 */
     const SPRITE = 64;
-    const sprites = COLORS.map((c) => {
-      const cv = document.createElement('canvas');
-      cv.width = cv.height = SPRITE;
-      const g = cv.getContext('2d');
-      const rg = g.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
-      rg.addColorStop(0, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',1)');
-      rg.addColorStop(.42, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',.34)');
-      rg.addColorStop(1, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0)');
-      g.fillStyle = rg;
-      g.fillRect(0, 0, SPRITE, SPRITE);
-      return cv;
-    });
+    function buildSprites() {
+      return COLORS.map((c) => {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = SPRITE;
+        const g = cv.getContext('2d');
+        const rg = g.createRadialGradient(SPRITE / 2, SPRITE / 2, 0,
+          SPRITE / 2, SPRITE / 2, SPRITE / 2);
+        rg.addColorStop(0, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',1)');
+        rg.addColorStop(.42, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',.34)');
+        rg.addColorStop(1, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0)');
+        g.fillStyle = rg;
+        g.fillRect(0, 0, SPRITE, SPRITE);
+        return cv;
+      });
+    }
+    let sprites = buildSprites();
+
+    /* 换配色时重算：光点贴图要重画，不然还是旧颜色 */
+    function retint() {
+      pal = readPalette();
+      COLORS = pal.dots.slice();
+      sprites = buildSprites();
+      if (reduceMotion) draw(performance.now());
+    }
 
     function resize() {
       DPR = Math.min(devicePixelRatio || 1, 2);
@@ -285,7 +350,7 @@
           if (d2 > LINK_DIST * LINK_DIST) continue;
           const t = 1 - Math.sqrt(d2) / LINK_DIST;
           const alpha = t * 0.085 * (0.35 + (a.near + b.near) / 2);
-          ctx.strokeStyle = 'rgba(226,222,214,' + alpha.toFixed(3) + ')';
+          ctx.strokeStyle = 'rgba(' + pal.link.join(',') + ',' + alpha.toFixed(3) + ')';
           ctx.lineWidth = 0.7;
           ctx.beginPath();
           ctx.moveTo(a.sx, a.sy);
@@ -305,7 +370,7 @@
         ctx.drawImage(sprites[p.si], pr.sx - r, pr.sy - r, r * 2, r * 2);
         /* 高光核心，让粒子有「实心感」 */
         ctx.globalAlpha = Math.max(0, Math.min(1, pr.a * 0.95));
-        ctx.fillStyle = '#EFEBE4';
+        ctx.fillStyle = 'rgb(' + pal.core.join(',') + ')';
         ctx.beginPath();
         ctx.arc(pr.sx, pr.sy, Math.max(0.5, pr.r * 0.4), 0, Math.PI * 2);
         ctx.fill();
@@ -315,8 +380,8 @@
       /* 鼠标处的一圈微光 */
       if (hasMouse) {
         const g2 = ctx.createRadialGradient(mx, my, 0, mx, my, 140);
-        g2.addColorStop(0, 'rgba(201,169,106,.055)');
-        g2.addColorStop(1, 'rgba(201,169,106,0)');
+        g2.addColorStop(0, 'rgba(' + pal.glow.join(',') + ',.055)');
+        g2.addColorStop(1, 'rgba(' + pal.glow.join(',') + ',0)');
         ctx.fillStyle = g2;
         ctx.beginPath();
         ctx.arc(mx, my, 140, 0, Math.PI * 2);
@@ -358,7 +423,8 @@
     return {
       count: COUNT,
       get fps() { return fps; },
-      resize
+      resize,
+      retint
     };
   })();
 
@@ -907,7 +973,7 @@
           const cv = document.createElement('canvas');
           cv.width = w; cv.height = h;
           const ctx = cv.getContext('2d');
-          ctx.fillStyle = '#0A0A0B';
+          ctx.fillStyle = 'rgb(' + cssColor('--bg', [0, 0, 0]).join(',') + ')';
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
           resolve(cv.toDataURL('image/jpeg', quality));
@@ -927,7 +993,7 @@
     ['cats',    '我的几面'],
     ['stats',   '三个数字'],
     ['socials', '联系方式与社交'],
-    ['footer',  '页脚与备份']
+    ['footer',  '界面颜色 / 下载备份']
   ];
   let openName = null;          /* 当前打开的抽屉 */
   let drawerCatId = null;       /* 详情抽屉正在编辑哪一面 */
@@ -1266,6 +1332,7 @@
     el.className = 'blk';
     el.innerHTML =
       '<div class="blk-head">' +
+        '<span class="blk-no">' + pad2(bi + 1) + '</span>' +
         '<span class="blk-kind">' + kindLabel(b.type) + '</span>' +
         '<select data-bf="type">' + BLOCK_KINDS.map((k) =>
           '<option value="' + k.type + '"' + (k.type === b.type ? ' selected' : '') + '>' +
@@ -1344,23 +1411,30 @@
   function buildCategoryEditor(cat, i) {
     const el = document.createElement('div');
     el.className = 'row';
+    const blkCount = Array.isArray(cat.blocks) ? cat.blocks.length : 0;
     el.innerHTML =
-      '<div class="row-top">' +
-        '<div class="thumb">' + esc(cat.glyph || pad2(i + 1)) + '</div>' +
-        '<div class="grow"><input data-cf="name" value="' + esc(cat.name) + '" placeholder="这一面的名字"></div>' +
+      '<div class="ed-sec">' +
+        '<h3>这一面叫什么 <em>名字会显示在首页卡片和标题上</em></h3>' +
+        '<div class="row-top">' +
+          '<div class="thumb">' + esc(cat.glyph || pad2(i + 1)) + '</div>' +
+          '<div class="grow"><input data-cf="name" value="' + esc(cat.name) + '" placeholder="这一面的名字"></div>' +
+        '</div>' +
+        '<div class="two">' +
+          '<label class="field"><span>编号 <em>（卡片角上的字）</em></span><input data-cf="glyph" value="' + esc(cat.glyph) + '"></label>' +
+          '<label class="field"><span>英文名</span><input data-cf="en" value="' + esc(cat.en) + '"></label>' +
+        '</div>' +
+        '<label class="field"><span>一句话说明</span><input data-cf="summary" value="' + esc(cat.summary) + '"></label>' +
+        '<label class="field"><span>链接 id <em>（英文、唯一，改它等于换网址）</em></span><input data-cf="id" value="' + esc(cat.id) + '"></label>' +
       '</div>' +
-      '<div class="two">' +
-        '<label class="field"><span>编号</span><input data-cf="glyph" value="' + esc(cat.glyph) + '"></label>' +
-        '<label class="field"><span>英文名</span><input data-cf="en" value="' + esc(cat.en) + '"></label>' +
-      '</div>' +
-      '<label class="field"><span>一句话说明</span><input data-cf="summary" value="' + esc(cat.summary) + '"></label>' +
-      '<label class="field"><span>id（英文，链接用，需唯一）</span><input data-cf="id" value="' + esc(cat.id) + '"></label>' +
-      '<div class="blk-wrap"></div>' +
-      '<div class="row-tools">' +
-        '<button class="mini-btn ghost" data-act="blk-add" type="button">+ 内容块</button>' +
-        '<button class="mini-btn ghost" data-act="up" type="button">↑ 上移</button>' +
-        '<button class="mini-btn ghost" data-act="down" type="button">↓ 下移</button>' +
-        '<button class="mini-btn danger" data-act="del" type="button">删除这一面</button>' +
+      '<div class="ed-sec">' +
+        '<h3>这一面的内容块 <i class="num">' + blkCount + '</i></h3>' +
+        '<div class="blk-wrap"></div>' +
+        '<div class="row-tools">' +
+          '<button class="mini-btn ghost" data-act="blk-add" type="button">+ 内容块</button>' +
+          '<button class="mini-btn ghost" data-act="up" type="button">↑ 上移</button>' +
+          '<button class="mini-btn ghost" data-act="down" type="button">↓ 下移</button>' +
+          '<button class="mini-btn danger" data-act="del" type="button">删除这一面</button>' +
+        '</div>' +
       '</div>';
 
     $$('[data-cf]', el).forEach((inp) => {
@@ -1400,6 +1474,12 @@
 
   /* 每个槽位可能出现在多个抽屉里，一律全部填充 */
   const slots = (name) => $$('[data-slot="' + name + '"]');
+
+  /* 分区标题右边的数量，让人一眼知道这块有几条 */
+  function setCount(id, n) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = n;
+  }
 
   function renderEditorLists() {
     /* 数字 */
@@ -1480,6 +1560,12 @@
         box.appendChild(row);
       });
     });
+
+    /* 分区标题上的数量 */
+    setCount('statCount', state.stats.length);
+    setCount('factCount', state.facts.length);
+    setCount('catCount', state.categories.length);
+    setCount('socCount', state.socials.length);
   }
 
   /* —— 头像 —— */
@@ -1562,11 +1648,13 @@
     const c = state.coords || {};
     val.textContent = coordText(c);
     if (!num(c.lat) || !num(c.lng)) {
-      meta.textContent = '还没有坐标，点「📍 定位我」或「手填」';
+      meta.textContent = geoPerm === 'denied'
+        ? '定位权限被浏览器挡住了，点「📍 定位我」看怎么开'
+        : '还没有坐标，点「📍 定位我」或「手填」';
       return;
     }
-    const bits = [c.source === 'gps' ? 'GPS 定位' : '手填'];
-    if (c.acc) bits.push('精度 ±' + Math.round(c.acc) + ' 米');
+    const bits = [SRC_LABEL[c.source] || '手填'];
+    if (c.acc && c.source === 'gps') bits.push('精度 ±' + Math.round(c.acc) + ' 米');
     if (c.at) bits.push(agoText(c.at));
     if (watchId !== null) bits.push('跟随中');
     meta.innerHTML = (watchId !== null ? '<i class="live-dot"></i>' : '') + esc(bits.join(' · '));
@@ -1587,11 +1675,12 @@
   }
 
   function gpsFail(err) {
+    const code = err && err.code;
+    if (code === 1) { geoPerm = 'denied'; showGeo('denied'); return; }
     toast({
-      1: '你拒绝了定位权限。可以在地址栏左侧的图标里重新允许，或者直接手填坐标。',
-      2: '暂时拿不到位置：系统定位可能关着，或信号太弱。',
-      3: '定位超时了，再试一次或直接手填。'
-    }[err && err.code] || '定位失败，可以直接手填坐标。');
+      2: '暂时拿不到位置：系统的定位服务可能关着，或信号太弱。',
+      3: '定位超时了，再试一次，或者用网络粗略定位 / 手填。'
+    }[code] || '定位失败，可以直接手填坐标。');
   }
 
   function stopFollow() {
@@ -1603,21 +1692,182 @@
     renderCoords();
   }
 
-  function locate() {
-    if (!navigator.geolocation) { toast('这个浏览器不支持定位，请手填'); return; }
-    if (location.protocol === 'file:') {
-      toast('用 file:// 打开时浏览器禁止定位；请用线上地址，或直接手填');
-      return;
+  /* 先问浏览器：这个站点的定位权限现在是什么状态 */
+  function geoPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) {
+      return Promise.resolve('unknown');
     }
+    return navigator.permissions.query({ name: 'geolocation' })
+      .then((st) => st.state || 'unknown')
+      .catch(() => 'unknown');
+  }
+
+  /* 真的要位置：这一步会触发浏览器自己那个「允许 / 阻止」小窗 */
+  function geoRequest() {
     toast('正在定位…');
     navigator.geolocation.getCurrentPosition((pos) => {
       const c = pos.coords;
+      geoPerm = 'granted';
       setCoords(c.latitude, c.longitude, {
         acc: Math.round(c.accuracy || 0), source: 'gps'
       });
       toast('已定位：' + coordText(state.coords));
       reverseGeocode(c.latitude, c.longitude);
     }, gpsFail, { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
+  }
+
+  function locate() {
+    if (!navigator.geolocation) { showGeo('unsupported'); return; }
+    if (location.protocol === 'file:') { showGeo('file'); return; }
+    geoPermission().then((st) => {
+      geoPerm = st;
+      /* 已经允许过：直接定位，不再打扰
+         还没决定过：先弹我们自己的说明卡，点「允许并定位」再让浏览器问
+         被阻止过：浏览器不会再问了，给开启步骤 + 两条替代路 */
+      if (st === 'granted') { geoRequest(); return; }
+      showGeo(st === 'denied' ? 'denied' : 'ask');
+    });
+  }
+
+  /* —— 页内说明卡：把「为什么」和「接下来怎么办」讲清楚 —— */
+  const geoEl = $('#geo');
+
+  function browserName() {
+    const ua = navigator.userAgent || '';
+    if (/Edg\//.test(ua)) return 'Edge';
+    if (/OPR\//.test(ua)) return 'Opera';
+    if (/Firefox\//.test(ua)) return 'Firefox';
+    if (/Chrome\//.test(ua)) return 'Chrome';
+    if (/Safari\//.test(ua)) return 'Safari';
+    return '';
+  }
+
+  function permSteps() {
+    const b = browserName();
+    if (b === 'Safari') return [
+      '点屏幕左上角菜单栏的「Safari」→「设置」',
+      '选「网站」，左边找到「位置」',
+      '在列表里找到这个网址，把权限改成「允许」',
+      '刷新本页'
+    ];
+    if (b === 'Firefox') return [
+      '点地址栏左边那个「🔒」小锁',
+      '把「位置」那一项改成「允许」',
+      '刷新本页（或者点下面的「重新检测」）'
+    ];
+    return [
+      '点地址栏左边那个「🔒」或「ⓘ」小图标',
+      '在弹出的面板里，把「位置」从「阻止」改成「允许」',
+      '关掉面板，刷新本页（或者点下面的「重新检测」）'
+    ];
+  }
+
+  function geoBtn(act, label, primary) {
+    return '<button class="mini-btn' + (primary ? ' primary' : '') +
+      '" data-geo="' + act + '" type="button">' + label + '</button>';
+  }
+
+  function showGeo(mode) {
+    if (!geoEl) return;
+    const T = $('#geoTitle'), B = $('#geoBody'), A = $('#geoActs');
+    if (!T || !B || !A) return;
+    const b = browserName();
+
+    if (mode === 'ask') {
+      T.textContent = '读取你的位置，需要你点一下「允许」';
+      B.innerHTML =
+        '<p>接下来浏览器会自己弹一个小窗，问「是否允许获取你的位置」，' +
+        '点<b>允许</b>就行。</p>' +
+        '<p>位置只用来在这一页上显示坐标，不会上传，也不会发给别人。</p>';
+      A.innerHTML = geoBtn('allow', '允许并定位', 1) +
+        geoBtn('net', '不想授权：用网络粗略定位') + geoBtn('manual', '手填坐标');
+    } else if (mode === 'denied') {
+      T.textContent = '定位权限被浏览器挡住了';
+      B.innerHTML =
+        '<p>你之前点过「阻止」，浏览器就记住了：同一个网站它不会再问第二次。' +
+        '这是浏览器的安全规矩，网页自己没法再弹窗求你同意。</p>' +
+        '<p>手动开一次就好，以后一直有效' + (b ? '（' + esc(b) + ' 里这样点）：' : '：') + '</p>' +
+        '<ol>' + permSteps().map((x) => '<li>' + esc(x) + '</li>').join('') + '</ol>' +
+        '<p>还是不行的话，看一眼 Windows 的 <code>设置 → 隐私和安全性 → 位置</code> 有没有打开。</p>' +
+        '<p>不想折腾也没关系，下面两条路一样能用。</p>';
+      A.innerHTML = geoBtn('retry', '我已改好，重新检测') +
+        geoBtn('net', '用网络粗略定位', 1) + geoBtn('manual', '手填坐标');
+    } else if (mode === 'file') {
+      T.textContent = '本地打开的文件不允许定位';
+      B.innerHTML = '<p>你大概是直接双击 <code>index.html</code> 打开的吧？' +
+        '浏览器规定 <code>file://</code> 打开的页面一律不给定位权限。</p>' +
+        '<p>用线上网址打开就正常了；或者走下面两条路，一样能出坐标。</p>';
+      A.innerHTML = geoBtn('net', '用网络粗略定位', 1) + geoBtn('manual', '手填坐标');
+    } else if (mode === 'unsupported') {
+      T.textContent = '这个浏览器不支持定位';
+      B.innerHTML = '<p>换 Chrome / Edge / Safari 都可以，或者直接手填坐标。</p>';
+      A.innerHTML = geoBtn('manual', '手填坐标', 1);
+    } else {
+      T.textContent = '网络定位也没成功';
+      B.innerHTML = '<p>可能是没联网，或者网络定位服务这会儿不可用。手填最省事。</p>' +
+        '<p>想找坐标：在地图上右键那个点，「复制坐标」出来的两个数就是' +
+        '纬度在前、经度在后。</p>';
+      A.innerHTML = geoBtn('manual', '手填坐标', 1) + geoBtn('retry', '再试一次');
+    }
+
+    geoEl.hidden = false;
+    $$('[data-geo]', A).forEach((x) => {
+      x.addEventListener('click', () => onGeoAct(x.dataset.geo));
+    });
+  }
+
+  function hideGeo() { if (geoEl) geoEl.hidden = true; }
+
+  function onGeoAct(act) {
+    hideGeo();
+    if (act === 'allow') { geoRequest(); return; }
+    if (act === 'retry') {
+      if (!navigator.geolocation) { showGeo('unsupported'); return; }
+      geoPermission().then((st) => {
+        geoPerm = st;
+        if (st === 'denied') { showGeo('denied'); return; }
+        geoRequest();
+      });
+      return;
+    }
+    if (act === 'net') { locateByNetwork(); return; }
+    if (act === 'manual') { fillCoordForm(); setOpen('coord', true); }
+  }
+
+  /* —— 网络粗略定位：不用任何权限，代价是只精确到城市 —— */
+  const NET_SOURCES = [
+    { url: 'https://ipwho.is/',
+      pick: (d) => (d && d.success !== false && num(d.latitude))
+        ? { lat: d.latitude, lng: d.longitude, city: d.city, country: d.country } : null },
+    { url: 'https://ipapi.co/json/',
+      pick: (d) => (d && num(d.latitude))
+        ? { lat: d.latitude, lng: d.longitude, city: d.city, country: d.country_name } : null }
+  ];
+
+  async function locateByNetwork() {
+    if (typeof fetch !== 'function') { showGeo('netfail'); return; }
+    toast('正在用网络粗略定位…');
+    for (const src of NET_SOURCES) {
+      try {
+        const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctl ? setTimeout(() => ctl.abort(), 7000) : null;
+        const res = await fetch(src.url, ctl ? { signal: ctl.signal } : undefined);
+        if (timer) clearTimeout(timer);
+        const data = await res.json();
+        const hit = src.pick(data);
+        if (!hit) continue;
+        setCoords(hit.lat, hit.lng, { acc: 25000, source: 'ip' });
+        if (hit.city || hit.country) {
+          state.location = [hit.city, hit.country].filter(Boolean).join(' · ') +
+            ' · ' + tzText();
+          renderAll();
+          commit();
+        }
+        toast('已定位到 ' + (hit.city || '大致位置') + '（大约 ±25 公里）');
+        return;
+      } catch (e) { /* 这个来源不行，换下一个 */ }
+    }
+    showGeo('netfail');
   }
 
   function toggleFollow() {
@@ -1661,6 +1911,7 @@
 
   if ($('#locBtn')) $('#locBtn').addEventListener('click', locate);
   if ($('#coordNow')) $('#coordNow').addEventListener('click', locate);
+  if ($('#coordNet')) $('#coordNet').addEventListener('click', locateByNetwork);
   if ($('#locFollow')) $('#locFollow').addEventListener('click', toggleFollow);
   if ($('#locEdit')) {
     $('#locEdit').addEventListener('click', () => {
@@ -1700,6 +1951,24 @@
       setCoords(la, ln, { source: 'manual' });
     });
   });
+
+  /* 说明卡的两种关法：右上角 ✕、点卡片外面 */
+  if ($('#geoX')) $('#geoX').addEventListener('click', hideGeo);
+  if (geoEl) {
+    geoEl.addEventListener('click', (e) => { if (e.target === geoEl) hideGeo(); });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     五、配色：页脚抽屉里的三个按钮（黑 / 灰 / 白）
+     ══════════════════════════════════════════════════════════════════ */
+  $$('[data-theme-set]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const id = applyTheme(b.dataset.themeSet);
+      const t = THEMES.find((x) => x.id === id);
+      toast('配色换成「' + t.name + '」');
+    });
+  });
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'obsidian');
 
   /* —— 导出 / 复制 / 重置 —— */
   const configText = () =>
