@@ -7,12 +7,22 @@
 <meta name="description" content="Lake 的个人主页 · 我的几面 · 人生记录 · 联系方式" data-page-node-id="9EimTGVja2OgCEMs8Pypdp" />
 <meta name="author" content="Lake" data-page-node-id="LakeAuthor01" />
 <title>Lake · 个人主页</title>
-<link rel="stylesheet" href="style.css" data-page-node-id="ePa6W5eyVFw3NygfnbZUQy" />
+<link rel="stylesheet" href="style.css?v=6" data-page-node-id="ePa6W5eyVFw3NygfnbZUQy" />
 </head>
 
 <body data-page-node-id="QecrZIHGNI5fA1GQEg3Ttt">
 
-<!-- ══ 背景：水底（光雾 / 网格）+ 水面（water.js 画在 canvas 上）══ -->
+<!-- ══ 液态玻璃的折射滤镜定义（只定义、不显示；被 style.css 的 url(#lgLens) 引用）══ -->
+<svg class="lg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <filter id="lgLens" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.005 0.008" numOctaves="2" seed="11" result="noise" />
+    <feGaussianBlur in="noise" stdDeviation="4" result="soft" />
+    <feDisplacementMap in="SourceGraphic" in2="soft" scale="24"
+                       xChannelSelector="R" yChannelSelector="G" />
+  </filter>
+</svg>
+
+<!-- ══ 背景：光雾 / 网格（底色）+ 柔光拖尾（glow.js 画在 canvas 上）══ -->
 <div class="bg" aria-hidden="true" data-page-node-id="uEpJpsCDOe0rGMxDaXJ6r1">
   <span class="layer far" data-page-node-id="6CXWVQtt1ZGr05aIynbhCB">
     <i class="cloud light c1" data-page-node-id="uliMQF8icvr1PZrdJFU5PO"></i>
@@ -35,7 +45,7 @@
   <span class="liquid a" data-page-node-id="mOOBCrWFuc2ie3C8Io5cEh"></span>
   <span class="liquid b" data-page-node-id="p9YwKdZ3xVqRmTbF"></span>
   <span class="grid" data-page-node-id="9AMKromCYygnuMGfpiab7E"></span>
-  <canvas class="water" id="water" data-page-node-id="wT9pQm4VbLc2hRdE"></canvas>
+  <canvas class="glow" id="glow" data-page-node-id="wT9pQm4VbLc2hRdE"></canvas>
   <span class="grain" data-page-node-id="39gsAKkczpcc7slvb79Zd4"></span>
   <span class="vignette" data-page-node-id="TEH7iDNnQMhDvewbGYxcaN"></span>
 </div>
@@ -84,6 +94,28 @@
         <span class="mono sec-hint" data-page-node-id="3GfcjnvAkYLEE96j8RiFCJ">点开任意一面</span>
       </header>
       <div class="facet-grid" id="facetGrid" data-page-node-id="2BMPlOCPkdq0JRbaWGbG0y"></div>
+    </section>
+
+    <!-- ══════════════ ★ 新增：相册 / 摄影（折叠）══════════════
+         常驻的只有这一行入口：标题 + 张数 + 「展开」按钮。
+         照片卡片由 app.js 的 expandGallery() 在第一次点开时才创建，
+         图片地址平时放在 data-src 里 —— 所以首屏一张照片都不会加载。
+         清单在 profile.js 的 gallery 数组里改（详见那个文件里的说明）。 -->
+    <section class="wrap sec" id="gallerySec" data-page-node-id="GAL000000000000000001">
+      <header class="sec-head reveal" data-page-node-id="GAL000000000000000002">
+        <span class="mono eyebrow" data-page-node-id="GAL000000000000000003">PHOTOGRAPHY</span>
+        <h2 class="sec-title" data-page-node-id="GAL000000000000000004">
+          镜头里
+          <span class="sec-count mono" id="galleryCount" data-page-node-id="GAL000000000000000005"></span>
+        </h2>
+        <div class="sec-actions" data-page-node-id="GAL000000000000000008">
+          <p class="sec-note" data-page-node-id="GAL000000000000000006">拍下的光、路上的人、没来得及说的话。</p>
+          <button class="gallery-toggle glass" id="galleryToggle" type="button"
+                  aria-expanded="false" aria-controls="galleryGrid"
+                  data-page-node-id="GAL000000000000000009"><span id="galleryToggleText">展开</span><span class="go" aria-hidden="true">▾</span></button>
+        </div>
+      </header>
+      <div class="gallery-grid reveal" id="galleryGrid" hidden data-page-node-id="GAL000000000000000007"></div>
     </section>
 
     <!-- ── 数字 ── -->
@@ -143,6 +175,12 @@
 
 </main>
 
+<!-- ══ ★ 新增：鼠标拖尾的「锐利层」══
+     #glow 在 .bg 里、会被玻璃卡的 backdrop-filter 糊掉，这一张固定在视口上、
+     z-index: 35，压在正文卡片之上、顶栏与灯箱之下，线永远清晰。
+     pointer-events: none —— 点它不影响任何交互。由 glow.js 负责绘制。 -->
+<canvas class="glow-top" id="glowTop" aria-hidden="true" data-page-node-id="GLW000000000000000001"></canvas>
+
 <footer class="wrap foot" data-page-node-id="w4q3yMGlvqvoY3X7kfKgwc">
   <span id="copyright" data-page-node-id="f0olr6QZ30ginHa5R6QkYy"></span>
   <span class="mono foot-mono" data-page-node-id="8tjOoBPZwsK8ozOjjhnl2h">HTML · CSS · JS · 零依赖</span>
@@ -160,8 +198,8 @@
   </figure>
 </div>
 
-<script src="profile.js" defer></script>
-<script src="water.js" defer></script>
-<script src="app.js" defer></script>
+<script src="profile.js?v=6" defer></script>
+<script src="glow.js?v=6" defer></script>
+<script src="app.js?v=6" defer></script>
 </body>
 </html>

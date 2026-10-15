@@ -24,6 +24,21 @@
   /* ══ 规范化：profile.js 少写了字段也不会崩 ══════════════════════ */
   const BLOCK_TYPES = ['text', 'list', 'tags', 'stats', 'timeline', 'links', 'photos', 'albums'];
 
+  /* ★ 2026-10-15 新增：相册 / 摄影。
+     内容来源是 profile.js 顶层的 gallery 数组（见那里的说明）。
+     写错的条目会被安静丢掉，不会让首页报错。 */
+  function normalizeGalleryItem(p, i) {
+    const s = p || {};
+    const src = String(s.src || s.p || '').trim();
+    if (!src) return null;
+    return {
+      src: src,
+      title: s.title || ('未命名照片 ' + pad2(i + 1)),
+      caption: s.caption || '',
+      album: s.album || ''
+    };
+  }
+
   function normalizeBlock(b) {
     const src = b || {};
     const type = BLOCK_TYPES.includes(src.type) ? src.type : 'text';
@@ -72,6 +87,11 @@
       copyright: src.copyright || '© 2025 Lake · 保留所有权利',
       city: src.city || '城市待填',
       facts: Array.isArray(src.facts) ? src.facts : [],
+      /* ★ 新增：相册/摄影的条目清单（见 renderGallery）
+         默认折叠：页面上只有一行入口，点开才建卡片、才请求图片。 */
+      gallery: Array.isArray(src.gallery)
+        ? src.gallery.map(normalizeGalleryItem).filter(Boolean) : [],
+      expand: false,
       intro: src.intro || ''
     };
   }
@@ -151,6 +171,73 @@
     $('#copyright').textContent = state.copyright;
 
     wireFacets();
+    renderGallery();
+    observeReveals();
+  }
+
+  /* ══ ★ 新增：相册 / 摄影（首页，折叠式） ══════════════════════════
+     清单来自 profile.js 的 gallery 数组；这里只负责把它画成一格一格的卡片。
+     默认只画「标题 + 张数 + 展开按钮」这一行 —— 卡片和图片都要等第一次点开
+     才创建（图片地址先放 data-src），所以首屏一张照片都不会加载。
+     卡片沿用分类详情里 photos 块的那套结构（.photo / .photo-media / .photo-body），
+     样式、悬停、点开大图的行为和原来的照片块完全一致。
+     照片数量为 0 时整块自动隐藏，页面上不会留一个空壳。 */
+  function renderGallery() {
+    const sec = $('#gallerySec');
+    const grid = $('#galleryGrid');
+    if (!sec || !grid) return;
+
+    const list = state.gallery;
+    if (!list.length) {
+      sec.hidden = true;
+      grid.innerHTML = '';
+      return;
+    }
+    sec.hidden = false;
+
+    const count = $('#galleryCount');
+    if (count) count.textContent = list.length + ' 张';
+
+    const toggle = $('#galleryToggle');
+    const txt = $('#galleryToggleText');
+    if (txt) txt.textContent = state.expand ? '收起' : '展开';
+    if (toggle) toggle.setAttribute('aria-expanded', state.expand ? 'true' : 'false');
+
+    if (!state.expand) {                       /* 折叠态：清空 DOM，回到零请求 */
+      grid.hidden = true;
+      grid.innerHTML = '';
+      return;
+    }
+
+    expandGallery(list);
+  }
+
+  /* 只在这里创建卡片与图片：这是全页唯一会给照片赋 src 的地方 */
+  function expandGallery(list) {
+    const grid = $('#galleryGrid');
+    if (!grid) return;
+
+    grid.dataset.n = String(Math.min(list.length, 3));   /* CSS 按张数选布局档位 */
+    grid.innerHTML = list
+      .map((p, i) => '<button class="photo reveal" type="button" data-p="' + i + '" ' +
+        'aria-label="查看照片：' + esc(p.title) + '">' +
+        '<span class="photo-media">' +
+          '<span class="photo-idx">' + pad2(i + 1) + '</span>' +
+          /* data-src：真正的地址等展开后才写进 src，首屏不产生任何图片请求 */
+          '<img data-src="' + esc(p.src) + '" alt="' + esc(p.title) + '" loading="lazy" />' +
+        '</span>' +
+        '<span class="photo-body"><strong class="photo-title">' + esc(p.title) + '</strong>' +
+        (p.caption ? '<span class="photo-cap">' + esc(p.caption) + '</span>' : '') +
+        '</span></button>').join('');
+
+    grid.hidden = false;
+    const imgs = grid.querySelectorAll('img[data-src]');
+    for (let i = 0; i < imgs.length; i++) {                /* 展开的同一帧里再换成 src */
+      imgs[i].src = imgs[i].getAttribute('data-src');
+      imgs[i].removeAttribute('data-src');
+    }
+
+    wirePhotoGrid(grid, () => list);
     observeReveals();
   }
 
@@ -403,23 +490,49 @@
 
   addEventListener('hashchange', route);
 
-  /* ══ 玻璃：跟着指针走的镜面反射 ══════════════════════════════════ */
+  /* ══ 相册：折叠 / 展开（第一次点开才创建图片，见 renderGallery）════ */
+  const galleryToggle = $('#galleryToggle');
+  if (galleryToggle) {
+    galleryToggle.addEventListener('click', () => {
+      state.expand = !state.expand;
+      renderGallery();
+    });
+  }
+
+  /* ══ 玻璃：跟着指针走的镜面反射 + 一丁点立体倾斜 ═════════════════
+     --mx / --my 决定镜面高光落在哪（百分比）；--tiltX / --tiltY 是
+     立体倾斜的角度，指针在卡片左上角时卡片向左上翻。离开就归零。
+     TILT 是最大倾角（度）：调大更「立体」，调小更含蓄。
+     ══════════════════════════════════════════════════════════════ */
+  const TILT = 5;
+  const HOT_SEL = '.glass,.photo,.link-card';
   let lastX = 0, lastY = 0, hot = null, hotRaf = false;
+  const cool = (el) => {
+    if (!el) return;
+    el.style.removeProperty('--tiltX');
+    el.style.removeProperty('--tiltY');
+  };
   if (!reduceMotion && matchMedia('(hover:hover)').matches) {
     addEventListener('pointermove', (e) => {
       lastX = e.clientX; lastY = e.clientY;
-      hot = e.target && e.target.closest ? e.target.closest('.glass') : null;
-      if (hotRaf) return;
+      const next = e.target && e.target.closest ? e.target.closest(HOT_SEL) : null;
+      if (next !== hot) { cool(hot); hot = next; }
+      if (hotRaf || !hot) return;
       hotRaf = true;
       requestAnimationFrame(() => {
         hotRaf = false;
-        if (!hot) return;
+        if (!hot || !hot.isConnected) return;
         const r = hot.getBoundingClientRect();
         if (!r.width) return;
-        hot.style.setProperty('--mx', ((lastX - r.left) / r.width * 100).toFixed(1) + '%');
-        hot.style.setProperty('--my', ((lastY - r.top) / r.height * 100).toFixed(1) + '%');
+        const px = (lastX - r.left) / r.width;    /* 0 → 1 */
+        const py = (lastY - r.top) / r.height;
+        hot.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+        hot.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+        hot.style.setProperty('--tiltY', ((px - .5) * 2 * TILT).toFixed(2) + 'deg');
+        hot.style.setProperty('--tiltX', ((.5 - py) * 2 * TILT).toFixed(2) + 'deg');
       });
     }, { passive: true });
+    addEventListener('pointerleave', () => { cool(hot); hot = null; });
   }
 
   /* ══ 顶栏 + 背景流动 ═════════════════════════════════════════════
