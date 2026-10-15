@@ -474,6 +474,32 @@ main { position: relative; z-index: 1; }
   84%           { background-position: -60% 0; }
 }
 
+/* 首屏文字栏下方那几行小信息（facts + 城市坐标，由 app.js 注入） */
+.portrait-facts {
+  margin: 22px 0 0;
+  max-width: 22em;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 10.5px;
+  letter-spacing: .04em;
+}
+.portrait-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.portrait-facts dt {
+  flex: none;
+  width: 3.6em;
+  color: var(--ink-3);
+  opacity: .85;
+}
+.portrait-facts dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
 /* ─────────── 6. 零件 ─────────── */
 .chips { display: flex; flex-wrap: wrap; gap: 9px; }
 

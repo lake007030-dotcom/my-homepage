@@ -55,12 +55,12 @@
   function normalize(p) {
     const src = p || {};
     return {
-      name: src.name || '你的名字',
-      brand: src.brand || src.name || '你的名字',
+      name: src.name || 'Lake',
+      brand: src.brand || src.name || 'Lake',
       monogram: src.monogram || initial(src.name),
-      role: src.role || '身份 / 头衔',
-      available: src.available || '开放合作',
-      statement: src.statement || '一句话介绍你自己。',
+      role: src.role || '在读学生 · 个人开发者',
+      available: src.available || '开放交流',
+      statement: src.statement || '做好自己。',
       accent: src.accent || '',
       avatar: src.avatar || '',
       stats: Array.isArray(src.stats) ? src.stats : [],
@@ -69,7 +69,10 @@
       socials: Array.isArray(src.socials) ? src.socials : [],
       email: src.email || 'hello@example.com',
       emailLabel: src.emailLabel || '有想法，随时聊聊。',
-      copyright: src.copyright || '© 2025 你的名字'
+      copyright: src.copyright || '© 2025 Lake · 保留所有权利',
+      city: src.city || '城市待填',
+      facts: Array.isArray(src.facts) ? src.facts : [],
+      intro: src.intro || ''
     };
   }
 
@@ -93,6 +96,21 @@
     /* 标签 */
     $('#focusList').innerHTML = state.focus.filter(Boolean)
       .map((t) => '<span class="chip">' + esc(t) + '</span>').join('');
+
+    /* 首屏右侧几行小信息：facts 逐条列出，「坐标」一行自动用 city 拼出来 */
+    try {
+      const col = document.querySelector('.hero .hero-text');
+      const old = document.querySelector('.hero .portrait-facts');
+      if (old) old.remove();
+      const rows = (state.facts || []).filter((x) => x && (x.k || x.v));
+      rows.push({ k: '坐标', v: state.city || '城市待填' });
+      if (col) {
+        col.insertAdjacentHTML('beforeend',
+          '<dl class="portrait-facts mono">' + rows.map((x) =>
+            '<div><dt>' + esc(x.k || '') + '</dt><dd>' + esc(x.v || '') + '</dd></div>'
+          ).join('') + '</dl>');
+      }
+    } catch (e) { /* 右侧信息画不出来也不影响其余部分 */ }
 
     /* 头像 */
     const av = $('#avatar');
